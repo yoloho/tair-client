@@ -10,6 +10,7 @@ package com.taobao.tair.comm;
 
 import java.util.Date;
 
+import com.taobao.tair.DataAddCountEntry;
 import com.taobao.tair.etc.TairConstant;
 import com.taobao.tair.etc.TairUtil;
 import com.taobao.tair.etc.TranscoderUtil;
@@ -36,6 +37,9 @@ public class DefaultTranscoder implements Transcoder {
     }
 
     public byte[] encode(Object object) {
+    	return encode(object, false);
+    }
+    public byte[] encode(Object object, boolean raw) {
         if (object == null) {
             throw new IllegalArgumentException("key,value can not be null");
         }
@@ -70,6 +74,10 @@ public class DefaultTranscoder implements Transcoder {
         } else if (object instanceof byte[]) {
             b    = (byte[]) object;
             flag = TairConstant.TAIR_STYPE_BYTEARRAY;
+        } else if (object instanceof DataAddCountEntry) {
+        	//for addcount ugly trick
+            b    = TranscoderUtil.encodeCounter(((DataAddCountEntry) object).getValue());
+            flag = TairConstant.TAIR_STYPE_INCDATA;
         } else {
             b    = TranscoderUtil.serialize(object);
             flag = TairConstant.TAIR_STYPE_SERIALIZE;
@@ -82,23 +90,27 @@ public class DefaultTranscoder implements Transcoder {
             flag += 1;
         }
 
-        TairUtil.checkMalloc(b.length + 2);
-
-        byte[] result = new byte[b.length + 2];
-        byte[] fg     = new byte[2];
-
-        fg[1]         = (byte) (flag & 0xFF);
-        fg[0]         = (byte) ((flag >> 8) & 0xFF);
-
-        for (int i = 0; i < 2; i++) {
-            result[i] = fg[i];
+        if (raw) {
+        	return b;
+        } else {
+	        TairUtil.checkMalloc(b.length + 2);
+	
+	        byte[] result = new byte[b.length + 2];
+	        byte[] fg     = new byte[2];
+	
+	        fg[1]         = (byte) (flag & 0xFF);
+	        fg[0]         = (byte) ((flag >> 8) & 0xFF);
+	
+	        for (int i = 0; i < 2; i++) {
+	            result[i] = fg[i];
+	        }
+	
+	        for (int i = 0; i < b.length; i++) {
+	            result[i + 2] = b[i];
+	        }
+	
+	        return result;
         }
-
-        for (int i = 0; i < b.length; i++) {
-            result[i + 2] = b[i];
-        }
-
-        return result;
     }
 
     public Object decode(byte[] data) {

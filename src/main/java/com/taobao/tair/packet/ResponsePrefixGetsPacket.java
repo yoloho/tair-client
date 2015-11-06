@@ -12,19 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.taobao.tair.DataEntry;
-import com.taobao.tair.ResultCode;
 import com.taobao.tair.comm.Transcoder;
 import com.taobao.tair.etc.TairConstant;
 
-public class ResponseGetPacket extends BasePacket {
+public class ResponsePrefixGetsPacket extends BasePacket {
 	protected int             configVersion;
     protected List<DataEntry> entryList;
     protected int resultCode;
-    protected List<DataEntry> proxiedKeyList;
+    protected List<DataEntry> failedKeyList;
 
-    public ResponseGetPacket(Transcoder transcoder) {
+    public ResponsePrefixGetsPacket(Transcoder transcoder) {
         super(transcoder);
-        this.pcode = TairConstant.TAIR_RESP_GET_PACKET;
+        this.pcode = TairConstant.TAIR_RESP_PREFIX_GETS_PACKET;
     }
 
     /**
@@ -40,34 +39,31 @@ public class ResponseGetPacket extends BasePacket {
     public boolean decode() {
         this.configVersion = byteBuffer.getInt();
         resultCode = byteBuffer.getInt();
+
+        //pkey
+        DataEntry pkey = new DataEntry();
+        pkey.decodeValue(byteBuffer, transcoder);
         
-
+        //nsucc
         int    count   = byteBuffer.getInt();
-        int    size    = 0;
-
         this.entryList = new ArrayList<DataEntry>(count);
 
 		for (int i = 0; i < count; i++) {
 			DataEntry de = new DataEntry();
 			de.decodeKeyValue(byteBuffer, transcoder);
+			int code = byteBuffer.getInt();
+			de.setReturnCode(code);
 			this.entryList.add(de);
 		}
-		
-		if (count > 1) {
-			
-			int pc = byteBuffer.getInt();
-			if (pc > 0) {
-				proxiedKeyList = new ArrayList<DataEntry>(pc);
-				for (int i=0; i<pc; i++) {
-					removeMetas();
-					DataEntry de = new DataEntry();
-					de.decodeMeta(byteBuffer);
-					size = byteBuffer.getInt();
-					if (size > 0)
-						proxiedKeyList.indexOf(transcoder.decode(byteBuffer.array(), byteBuffer
-						.position(), size));
-					byteBuffer.position(byteBuffer.position() + size);
-				}
+		//nfail
+		int failcount = byteBuffer.getInt();
+		if (failcount > 0) {
+			failedKeyList = new ArrayList<DataEntry>(failcount);
+			for (int i = 0; i < failcount; i++) {
+				DataEntry de = new DataEntry();
+				de.decodeKey(byteBuffer, transcoder);
+				int code = byteBuffer.getInt();
+				de.setReturnCode(code);
 			}
 		}
 
@@ -82,7 +78,15 @@ public class ResponseGetPacket extends BasePacket {
         this.entryList = entryList;
     }
 
-    /**
+    public List<DataEntry> getFailedKeyList() {
+		return failedKeyList;
+	}
+
+	public void setFailedKeyList(List<DataEntry> failedKeyList) {
+		this.failedKeyList = failedKeyList;
+	}
+
+	/**
      * 
      * @return the configVersion
      */

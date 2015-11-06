@@ -11,6 +11,8 @@ package com.taobao.tair;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 
+import com.taobao.tair.comm.Transcoder;
+import com.taobao.tair.etc.TairConstant;
 import com.taobao.tair.etc.TairUtil;
 
 /**
@@ -21,8 +23,12 @@ public class DataEntry implements Serializable {
 
 	private static final long serialVersionUID = -3492001385938512871L;
 	private static byte[] DEFAULT_DATA = new byte[29];
+	private Object pkey;
 	private Object key;
 	private Object value;
+	private boolean has_merged = false;
+	private boolean raw_value = false;
+	private int return_code = 0;
 
 	// meta data
 
@@ -32,10 +38,12 @@ public class DataEntry implements Serializable {
 	private int version;
 	private int padSize;
 	private int valueSize;
-	private int flag;
+	private byte flag;
 	private int cdate;
 	private int mdate;
 	private int edate;
+	
+	private byte value_flag;
 
 	public DataEntry() {
 	}
@@ -53,6 +61,43 @@ public class DataEntry implements Serializable {
 		this.key = key;
 		this.value = value;
 		this.version = version;
+	}
+
+	public Object getPkey() {
+		return pkey;
+	}
+
+	public void setPkey(Object pkey) {
+		this.pkey = pkey;
+		if (pkey != null) {
+			has_merged = true;
+		} else {
+			has_merged = false;
+		}
+	}
+	
+	public int getEdate() {
+		return edate;
+	}
+
+	public void setEdate(int edate) {
+		this.edate = edate;
+	}
+
+	public boolean isRawValue() {
+		return raw_value;
+	}
+
+	public void setRawValue(boolean raw_value) {
+		this.raw_value = raw_value;
+	}
+
+	public int getReturnCode() {
+		return return_code;
+	}
+
+	public void setReturnCode(int return_code) {
+		this.return_code = return_code;
 	}
 
 	public Object getKey() {
@@ -112,29 +157,148 @@ public class DataEntry implements Serializable {
 		bytes.putInt(de.mdate);
 		bytes.putInt(de.edate);
 	}
+	
+	public int encode(ByteBuffer bytes, Transcoder transcoder) throws Throwable {
+		if (key != null) {
+			fillMetas(bytes);
+			encodeMeta(bytes);
+			byte[] data = transcoder.encode(key);
+			if (has_merged) {
+				byte[] pdata = transcoder.encode(pkey);
+				if (data.length + pdata.length > TairConstant.TAIR_KEY_MAX_LENTH) {
+					return 1;
+				}
+				bytes.putInt((data.length + pdata.length) | pdata.length << 22);
+				bytes.put(pdata);
+			} else {
+				bytes.putInt(data.length);
+			}
+			bytes.put(data);
+		}
+		if (value != null) {
+			fillMetas(bytes);
+			encodeMeta(bytes);
+			if (value_flag > 0) {
+				int pos = bytes.position();
+				bytes.put(pos - 13, value_flag);
+			}
+			byte[] data = transcoder.encode(value, raw_value);
+			if (data.length > TairConstant.TAIR_VALUE_MAX_LENGTH) {
+				return 2;
+			}
+			bytes.putInt(data.length);
+			bytes.put(data);
+		}
+		return 0;
+	}
+	
+	public static int encode(ByteBuffer bytes, Object key, Transcoder transcoder) throws Throwable {
+		fillMetas(bytes);
+		encodeMeta(bytes);
+		byte[] data = transcoder.encode(key);
+		bytes.putInt(data.length);
+		bytes.put(data);
+		return data.length;
+	}
+	
+	public void decodeKey(ByteBuffer bytes, Transcoder transcoder) {
+		Object key = "";
+		removeMetas(bytes);
+		decodeMeta(bytes);
+		int size = bytes.getInt();
+		if (size > 0) {
+			int prefix_size = size >> 22;
+			size &= 0x3fffff;
+			if (prefix_size > 0) {
+				Object pkey = transcoder.decode(bytes.array(), bytes.position(), prefix_size);
+				setPkey(pkey);
+				bytes.position(bytes.position() + prefix_size);
+			}
+			key = transcoder.decode(bytes.array(), bytes.position(), size);
+			bytes.position(bytes.position() + size);
+		}
+		setKey(key);
+	}
+	
+	public void decodeValue(ByteBuffer bytes, Transcoder transcoder) {
+		Object val = "";
+		removeMetas(bytes);
+		decodeMeta(bytes);
+		int size = bytes.getInt();
+		if (size > 0) {
+			val = transcoder.decode(bytes.array(), bytes.position(), size);
+			bytes.position(bytes.position() + size);
+		}
+		setValue(val);
+	}
+	
+	public void decodeKeyValue(ByteBuffer bytes, Transcoder transcoder) {
+		Object key = "";
+		Object val = "";
+		removeMetas(bytes);
+		decodeMeta(bytes);
+		int size = bytes.getInt();
+		if (size > 0) {
+			int prefix_size = size >> 22;
+			size &= 0x3fffff;
+			if (prefix_size > 0) {
+				Object pkey = transcoder.decode(bytes.array(), bytes.position(), prefix_size);
+				setPkey(pkey);
+				bytes.position(bytes.position() + prefix_size);
+			}
+			key = transcoder.decode(bytes.array(), bytes.position(), size - prefix_size);
+			bytes.position(bytes.position() + size - prefix_size);
+		}
+		setKey(key);
+		removeMetas(bytes);
+		decodeMeta(bytes);
+		size = bytes.getInt();
+		if (size > 0) {
+			val = transcoder.decode(bytes.array(), bytes.position(), size);
+			bytes.position(bytes.position() + size);
+		}
+		setValue(val);
+	}
+	
+	
+	
+	public byte getValueFlag() {
+		return value_flag;
+	}
+
+	public void setValueFlag(byte flag) {
+		this.value_flag = flag;
+	}
 
 	public static void encodeMeta(ByteBuffer bytes) {
 		bytes.put(DEFAULT_DATA);
 	}
-	public static void merge_key(DataEntry prefixKey, DataEntry orignalKey, DataEntry returnEntry) {
-//		int pkey_size = prefixKey
-//		int skey_size = skey.get_size();
-//		char *buf = (char *)malloc(pkey_size + skey_size);
-//		memcpy(buf, pkey.get_data(), pkey_size);
-//		memcpy(buf + pkey_size, skey.get_data(), skey_size);
-//		mkey.set_alloced_data(buf, pkey_size + skey_size);
-//		mkey.set_prefix_size(pkey_size);
-	}
+	
 	@Override
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
-		sb.append("key: ").append(key);
-		sb.append(", value: ").append(value);
+		if (pkey != null) {
+			sb.append("pkey: ").append(pkey).append("\n\t");
+		}
+		sb.append("key: ").append(key).append("\n\t");
+		sb.append("value: ").append(value);
 		sb.append(", version: ").append(version).append("\n\t");
+		sb.append("flag: ").append(flag).append("\n\t");
 		sb.append("cdate: ").append(TairUtil.formatDate(cdate)).append("\n\t");
 		sb.append("mdate: ").append(TairUtil.formatDate(mdate)).append("\n\t");
 		sb.append("edate: ").append(edate > 0 ? TairUtil.formatDate(edate) : "NEVER").append("\n");
 		return sb.toString();
+	}
+	
+	protected static void fillMetas(ByteBuffer byteBuffer) {
+    	byte[] data = new byte[7];
+		byteBuffer.put(data);
+	}
+	
+	protected static void removeMetas(ByteBuffer byteBuffer) {
+		byteBuffer.get(); // isMerged
+		byteBuffer.getInt(); // area
+		byteBuffer.getShort(); // serverFlag
 	}
 
 }

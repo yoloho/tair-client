@@ -9,30 +9,51 @@
 package com.taobao.tair.impl;
 
 import java.io.Serializable;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.taobao.tair.packet.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import com.taobao.tair.CallMode;
+import com.taobao.tair.DataAddCountEntry;
 import com.taobao.tair.DataEntry;
 import com.taobao.tair.Result;
 import com.taobao.tair.ResultCode;
+import com.taobao.tair.TairCallback;
 import com.taobao.tair.TairManager;
 import com.taobao.tair.comm.DefaultTranscoder;
 import com.taobao.tair.comm.MultiSender;
 import com.taobao.tair.comm.TairClient;
 import com.taobao.tair.comm.TairClientFactory;
 import com.taobao.tair.comm.Transcoder;
+import com.taobao.tair.etc.CounterPack;
+import com.taobao.tair.etc.KeyCountPack;
+import com.taobao.tair.etc.KeyValuePack;
 import com.taobao.tair.etc.TairClientException;
 import com.taobao.tair.etc.TairConstant;
 import com.taobao.tair.etc.TairUtil;
-import com.taobao.tair.json.Json;
+import com.taobao.tair.packet.BasePacket;
+import com.taobao.tair.packet.MultiReturnPacket;
+import com.taobao.tair.packet.RequestCommandCollection;
+import com.taobao.tair.packet.RequestGetPacket;
+import com.taobao.tair.packet.RequestGetRangePacket;
+import com.taobao.tair.packet.RequestIncDecPacket;
+import com.taobao.tair.packet.RequestLockPacket;
+import com.taobao.tair.packet.RequestPrefixGetPacket;
+import com.taobao.tair.packet.RequestPrefixPutsPacket;
+import com.taobao.tair.packet.RequestPrefixRemovesPacket;
+import com.taobao.tair.packet.RequestPutPacket;
+import com.taobao.tair.packet.RequestRemovePacket;
+import com.taobao.tair.packet.ResponseGetPacket;
+import com.taobao.tair.packet.ResponseGetRangePacket;
+import com.taobao.tair.packet.ResponseIncDecPacket;
+import com.taobao.tair.packet.ResponsePrefixGetsPacket;
+import com.taobao.tair.packet.ReturnPacket;
+import com.taobao.tair.packet.TairPacketStreamer;
 
 public class DefaultTairManager implements TairManager {
 	private static final Log log = LogFactory.getLog(DefaultTairManager.class);
@@ -146,6 +167,9 @@ public class DefaultTairManager implements TairManager {
 	}
 
 	public ResultCode delete(int namespace, Serializable key) {
+		return delete(namespace, null, key);
+	}
+	public ResultCode delete(int namespace, Serializable pkey, Serializable key) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
 		}
@@ -154,6 +178,7 @@ public class DefaultTairManager implements TairManager {
 
 		packet.setNamespace((short) namespace);
 		packet.addKey(key);
+		packet.setPkey(pkey);
 
 		int ec = packet.encode();
 
@@ -181,6 +206,9 @@ public class DefaultTairManager implements TairManager {
 	}
 
 	public Result<DataEntry> get(int namespace, Serializable key) {
+		return get(namespace, null, key);
+	}
+	private Result<DataEntry> get(int namespace, Serializable pkey, Serializable key) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<DataEntry>(ResultCode.NSERROR);
 		}
@@ -189,6 +217,7 @@ public class DefaultTairManager implements TairManager {
 
 		packet.setNamespace((short) namespace);
 		packet.addKey(key);
+		packet.setPkey(pkey);
 
 		int ec = packet.encode();
 
@@ -197,7 +226,7 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet, true);
+		BasePacket returnPacket = sendRequest(pkey == null ? key : pkey, packet, true);
 
 		if ((returnPacket != null) && returnPacket instanceof ResponseGetPacket) {
 			ResponseGetPacket r = (ResponseGetPacket) returnPacket;
@@ -233,6 +262,11 @@ public class DefaultTairManager implements TairManager {
 	
 	private Result<Integer> addCount(int namespace, Serializable key, int value,
 			int defaultValue, int expireTime) {
+		return addCount(namespace, null, key, value, defaultValue, expireTime);
+	}
+	
+	private Result<Integer> addCount(int namespace, Serializable pkey, Serializable key, int value,
+			int defaultValue, int expireTime) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Integer>(ResultCode.NSERROR);
 		}
@@ -244,6 +278,7 @@ public class DefaultTairManager implements TairManager {
 
 		packet.setNamespace((short) namespace);
 		packet.setKey(key);
+		packet.setPkey(pkey);
 		packet.setCount(value);
 		packet.setInitValue(defaultValue);
 		packet.setExpireTime(expireTime);
@@ -255,7 +290,7 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
+		BasePacket returnPacket = sendRequest(pkey == null ? key : pkey, packet);
 
 		if ((returnPacket != null)) {
 			if (returnPacket instanceof ResponseIncDecPacket) {
@@ -452,9 +487,23 @@ public class DefaultTairManager implements TairManager {
 			int version) {
 		return put(namespace, key, value, version, 0);
 	}
-
+	
 	public ResultCode put(int namespace, Serializable key, Serializable value,
 			int version, int expireTime) {
+		return put(namespace, null, key, value, version, expireTime);
+	}
+
+	public ResultCode put(int namespace, Serializable pkey, Serializable key, Serializable value,
+			int version, int expireTime) {
+		return put(namespace, pkey, key, value, version, expireTime, (byte)0);
+	}
+	
+	private ResultCode put(int namespace, Serializable pkey, Serializable key, Serializable value,
+			int version, int expireTime, byte flag) {
+		return put(namespace, pkey, key, value, version, expireTime, flag, false);
+	}
+	private ResultCode put(int namespace, Serializable pkey, Serializable key, Serializable value,
+			int version, int expireTime, byte flag, boolean is_raw) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
 		}
@@ -466,7 +515,9 @@ public class DefaultTairManager implements TairManager {
 
 		packet.setNamespace((short) namespace);
 		packet.setKey(key);
+		packet.setPkey(pkey);
 		packet.setData(value);
+		packet.setFlag(flag);
 		packet.setVersion((short) version);
 		packet.setExpired(expireTime);
 
@@ -481,7 +532,7 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
+		BasePacket returnPacket = sendRequest(pkey != null ? pkey : key, packet);
 
 		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
 			ReturnPacket r = (ReturnPacket) returnPacket;
@@ -499,398 +550,62 @@ public class DefaultTairManager implements TairManager {
 		return rc;
 	}
 
-	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit, boolean reverse) {
+	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit) {
+		return getRange(namespace, prefix, keyStart, keyEnd, offset, limit, TairConstant.TAIR_GET_RANGE_ALL);
+	}
+	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit, short type) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<List<DataEntry>>(ResultCode.NSERROR);
 		}
 
 		RequestGetRangePacket packet = new RequestGetRangePacket(transcoder);
 		packet.setNamespace((short)namespace);
-
-		DataEntry prefixEntry = new DataEntry();
-		prefixEntry.setKey(prefix);
-		DataEntry startEntry = new DataEntry();
-		startEntry.setKey(keyStart);
-		DataEntry endEntry = new DataEntry();
-		endEntry.setKey(keyEnd);
-
-		packet.setKeyStart(startEntry);
-		packet.setKeyEnd(endEntry);
+		packet.setCmd(type);
+		packet.setKeyStart(keyStart);
+		packet.setKeyEnd(keyEnd);
+		packet.setPkey(prefix);
 
 		if(limit == 0){
 			limit = TairConstant.TAIR_MAX_COUNT;
 		}
 		packet.setLimit(limit);
 		packet.setOffset(offset);
-		return null;
+		int ec = packet.encode();
+		if (ec == 1) {
+			return new Result<List<DataEntry>>(ResultCode.KEYTOLARGE);
+		} else if (ec == 2) {
+			return new Result<List<DataEntry>>(ResultCode.VALUETOLARGE);
+		} else if (ec == 3) {
+			return new Result<List<DataEntry>>(ResultCode.SERIALIZEERROR);
+		}
+
+		ResultCode rc = ResultCode.CONNERROR;
+		BasePacket returnPacket = sendRequest(prefix, packet, true);
+
+		if ((returnPacket != null) && returnPacket instanceof ResponseGetRangePacket) {
+			ResponseGetRangePacket r = (ResponseGetRangePacket) returnPacket;
+
+			List<DataEntry> entryList = r.getEntryList();
+			rc = ResultCode.valueOf(r.getResultCode());
+			configServer.checkConfigVersion(r.getConfigVersion());
+
+			return new Result<List<DataEntry>>(rc, entryList);
+		}
+
+		return new Result<List<DataEntry>>(rc);
 	}
 
-
-/*
-	int tair_client_impl::get_range(int area, const data_entry &pkey, const data_entry &start_key, const data_entry &end_key,
-	                                int offset, int limit, vector<data_entry *> &values,short type)
-	{
-		if ( area < 0 || area >= TAIR_MAX_AREA_COUNT) {
-			return TAIR_RETURN_INVALID_ARGUMENT;
-		}
-
-		if (limit < 0 || offset < 0){
-			return TAIR_RETURN_INVALID_ARGUMENT;
-		}
-
-		data_entry merge_skey, merge_ekey;
-		merge_key(pkey, start_key, merge_skey);
-		merge_key(pkey, end_key, merge_ekey);
-
-		if (!key_entry_check(merge_skey) || !key_entry_check(merge_ekey)) {
-			return TAIR_RETURN_ITEMSIZE_ERROR;
-		}
-		vector<uint64_t> server_list;
-		if (!get_server_id(merge_skey, server_list)) {
-			TBSYS_LOG(WARN, "no dataserver available");
-			return TAIR_RETURN_FAILED;
-		}
-		if (limit == 0)
-			limit = RANGE_DEFAULT_LIMIT;
-
-		request_get_range *packet = new request_get_range();
-		packet->area = area;
-		packet->cmd = type;
-		packet->offset = offset;
-		packet->limit = limit;
-		packet->key_start.set_data(merge_skey.get_data(), merge_skey.get_size());
-		packet->key_start.set_prefix_size(merge_skey.get_prefix_size());
-		packet->key_end.set_data(merge_ekey.get_data(), merge_ekey.get_size());
-		packet->key_end.set_prefix_size(merge_ekey.get_prefix_size());
-
-		int ret = TAIR_RETURN_SEND_FAILED;
-		base_packet *tpacket = 0;
-		response_get_range *resp = 0;
-
-		wait_object *cwo = this_wait_object_manager->create_wait_object();
-		if((ret = send_request(server_list[0],packet,cwo->get_id())) < 0){
-			delete packet;
-			this_wait_object_manager->destroy_wait_object(cwo);
-			TBSYS_LOG(ERROR, "get_range failure: %s %d",get_error_msg(ret), ret);
-			return ret;
-		}
-
-		if((ret = get_response(cwo,1,tpacket)) < 0){
-			this_wait_object_manager->destroy_wait_object(cwo);
-			TBSYS_LOG(ERROR, "get_range get_response failure: %s %d ",get_error_msg(ret), ret);
-			return ret;
-		}
-
-		if(tpacket == 0 || tpacket->getPCode() != TAIR_RESP_GET_RANGE_PACKET){
-			TBSYS_LOG(ERROR, "get_range response packet error. pcode: %d", tpacket->getPCode());
-			ret = TAIR_RETURN_FAILED;
-		}
-		else {
-			resp = (response_get_range*)tpacket;
-			new_config_version = resp->config_version;
-			ret = resp->get_code();
-			if (ret != TAIR_RETURN_SUCCESS){
-				if(ret == TAIR_RETURN_SERVER_CAN_NOT_WORK || ret == TAIR_RETURN_WRITE_NOT_ON_MASTER) {
-					//update server table immediately
-					send_fail_count = UPDATE_SERVER_TABLE_INTERVAL;
-				}
-			}
-			else {
-				for(size_t i = 0; i < resp->key_data_vector->size(); i++) {
-					data_entry *data = new data_entry(*((*resp->key_data_vector)[i]));
-					values.push_back(data);
-				}
-				if (resp->get_hasnext()){
-					ret = TAIR_HAS_MORE_DATA;
-				}
-			}
-		}
-
-		this_wait_object_manager->destroy_wait_object(cwo);
-		return ret;
-	}*/
-	public Result<List<DataEntry>> getRangeOnlyValue(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit, boolean reverse) {
-		return null;
-	}
-
-	public Result<List<DataEntry>> getRangeOnlyKey(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit, boolean reverse) {
-		return null;
-	}
-
-	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit) {
-		return null;
-	}
 
 	public Result<List<DataEntry>> getRangeOnlyValue(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit) {
-		return null;
+		return getRange(namespace, prefix, key_start, key_end, offset, limit, TairConstant.TAIR_GET_RANGE_ONLY_VALUE);
 	}
 
 	public Result<List<DataEntry>> getRangeOnlyKey(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit) {
-		return null;
+		return getRange(namespace, prefix, key_start, key_end, offset, limit, TairConstant.TAIR_GET_RANGE_ONLY_KEY);
 	}
 
 	public Result<List<DataEntry>> delRange(int namespace, Serializable prefix, Serializable key_start, Serializable key_end, int offset, int limit, boolean reverse) {
 		return null;
-	}
-
-	// items impl
-	public ResultCode addItems(int namespace, Serializable key,
-			List<? extends Object> items, int maxCount, int version,
-			int expireTime) {
-		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
-			return ResultCode.NSERROR;
-		}
-		
-		if (maxCount <= 0 || expireTime < 0) {
-			return ResultCode.INVALIDARG;
-		}
-
-		RequestAddItemsPacket packet = new RequestAddItemsPacket(transcoder);
-
-		packet.setNamespace((short) namespace);
-		packet.setKey(key);
-		packet.setData(items);
-		packet.setVersion((short) version);
-		packet.setExpired(expireTime);
-		packet.setMaxCount(maxCount);
-
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return ResultCode.KEYTOLARGE;
-		} else if (ec == 2) {
-			return ResultCode.VALUETOLARGE;
-		} else if (ec == 3) {
-			return ResultCode.SERIALIZEERROR;
-		} else if (ec == 4) {
-			return ResultCode.ITEMTOLARGE;
-		}
-
-		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
-
-		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
-			ReturnPacket r = (ReturnPacket) returnPacket;
-
-			if (log.isDebugEnabled()) {
-				log.debug("get return packet: " + returnPacket + ", code="
-						+ r.getCode() + ", msg=" + r.getMsg());
-			}
-
-			if (r.getCode() == 0) {
-				rc = ResultCode.SUCCESS;
-			} else if (r.getCode() == 2) {
-				rc = ResultCode.VERERROR;
-			} else {
-				rc = ResultCode.valueOf(r.getCode());
-			}
-
-			configServer.checkConfigVersion(r.getConfigVersion());
-		}
-
-		return rc;
-	}
-
-	public Result<DataEntry> getAndRemove(int namespace,
-			Serializable key, int offset, int count) {
-		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
-			return new Result<DataEntry>(ResultCode.NSERROR);
-		}
-		
-		if (count <= 0) {
-			return new Result<DataEntry>(ResultCode.INVALIDARG);
-		}
-		
-		RequestGetAndRemoveItemsPacket packet = new RequestGetAndRemoveItemsPacket(transcoder);
-
-		packet.setNamespace((short) namespace);
-		packet.addKey(key);
-		packet.setCount(count);
-		packet.setOffset(offset);
-		packet.setType(Json.ELEMENT_TYPE_INVALID);
-
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return new Result<DataEntry>(ResultCode.KEYTOLARGE);
-		} else if (ec == 2) {
-			return new Result<DataEntry>(ResultCode.VALUETOLARGE);
-		}
-
-		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
-
-		DataEntry entry = null;
-		
-		if ((returnPacket != null) && returnPacket instanceof ResponseGetItemsPacket) {
-			ResponseGetItemsPacket r = (ResponseGetItemsPacket) returnPacket;
-			
-			
-			List<DataEntry> entryList = r.getEntryList();
-
-			rc = ResultCode.valueOf(r.getResultCode());
-			
-			if ((rc.isSuccess() || rc.equals(ResultCode.PARTSUCC)) && entryList.size() > 0) {
-				entry = entryList.get(0);
-				try {
-					entry.setValue(decodeItem((byte[])entry.getValue()));
-				} catch (Throwable e1) {
-					log.error("ITEM SERIALIZEERROR", e1);
-					rc = ResultCode.SERIALIZEERROR;
-				}
-			}
-
-			configServer.checkConfigVersion(r.getConfigVersion());
-		}
-		
-		return new Result<DataEntry>(rc, entry);
-	}
-
-	public Result<DataEntry> getItems(int namespace,
-			Serializable key, int offset, int count) {
-		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
-			return new Result<DataEntry>(ResultCode.NSERROR);
-		}
-		
-		if (count <= 0) {
-			return new Result<DataEntry>(ResultCode.INVALIDARG);
-		}
-		
-		RequestGetItemsPacket packet = new RequestGetItemsPacket(transcoder);
-
-		packet.setNamespace((short) namespace);
-		packet.addKey(key);
-		packet.setCount(count);
-		packet.setOffset(offset);
-		packet.setType(Json.ELEMENT_TYPE_INVALID);
-
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return new Result<DataEntry>(ResultCode.KEYTOLARGE);
-		} else if (ec == 2) {
-			return new Result<DataEntry>(ResultCode.VALUETOLARGE);
-		}
-
-		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
-
-		DataEntry entry = null;
-		
-		if ((returnPacket != null) && returnPacket instanceof ResponseGetItemsPacket) {
-			ResponseGetItemsPacket r = (ResponseGetItemsPacket) returnPacket;
-			
-			
-			List<DataEntry> entryList = r.getEntryList();
-
-			rc = ResultCode.valueOf(r.getResultCode());
-
-			if (rc.isSuccess() && entryList.size() > 0) {
-				entry = entryList.get(0);
-				try {
-					entry.setValue(decodeItem((byte[])entry.getValue()));
-				} catch (Throwable e1) {
-					log.error("ITEM SERIALIZEERROR", e1);
-					rc = ResultCode.SERIALIZEERROR;
-				}
-			}
-			
-			configServer.checkConfigVersion(r.getConfigVersion());
-		} 
-		
-		return new Result<DataEntry>(rc, entry);
-	}
-
-	public ResultCode removeItems(int namespace, Serializable key, int offset,
-			int count) {
-		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
-			return ResultCode.NSERROR;
-		}
-		
-		if (count <= 0) {
-			return ResultCode.INVALIDARG;
-		}
-		
-		RequestRemoveItemsPacket packet = new RequestRemoveItemsPacket(transcoder);
-
-		packet.setNamespace((short) namespace);
-		packet.addKey(key);
-		packet.setCount(count);
-		packet.setOffset(offset);
-
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return ResultCode.KEYTOLARGE;
-		} else if (ec == 2) {
-			return ResultCode.VALUETOLARGE;
-		}
-
-		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
-
-		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
-			ReturnPacket r = (ReturnPacket) returnPacket;
-			
-			rc = ResultCode.valueOf(r.getCode());
-
-			configServer.checkConfigVersion(r.getConfigVersion());
-		} 
-
-		return rc;
-	}
-	
-	public Result<Integer> getItemCount(int namespace, Serializable key) {
-		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
-			return new Result<Integer>(ResultCode.NSERROR);
-		}
-		
-		RequestGetItemsCountPacket packet = new RequestGetItemsCountPacket(transcoder);
-
-		packet.setNamespace((short) namespace);
-		packet.addKey(key);
-
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return new Result<Integer>(ResultCode.KEYTOLARGE);
-		} else if (ec == 2) {
-			return new Result<Integer>(ResultCode.VALUETOLARGE);
-		}
-
-		ResultCode rc = ResultCode.SUCCESS;
-		BasePacket returnPacket = sendRequest(key, packet);
-		
-		int count = 0;
-		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
-			ReturnPacket r = (ReturnPacket) returnPacket;
-			
-			count = ((ReturnPacket) returnPacket).getCode();
-			if (count < 0) {
-				rc = ResultCode.valueOf(count);
-				count = 0;
-			}
-
-			configServer.checkConfigVersion(r.getConfigVersion());
-		}
-
-		return new Result<Integer>(rc, count);
-	}
-	
-	List<Object> decodeItem(byte[] bytes) {
-		ByteBuffer buffer = ByteBuffer.wrap(bytes);
-		
-		int count = buffer.getInt();
-		List<Object> results = new ArrayList<Object>(count);
-		short dataLength = 0;
-		
-		for(int i=0; i<count; i++) {
-			dataLength = buffer.getShort();
-			byte[] data = new byte[dataLength];
-			buffer.get(data);
-			results.add(transcoder.decode(data));
-		}
-		return results;
 	}
    
 	public Map<String,String> getStat(int qtype, String groupName, long serverId){
@@ -954,5 +669,384 @@ public class DefaultTairManager implements TairManager {
 
 	public String toString() {
 		return name + " " + getVersion();
+	}
+
+	public Result<DataEntry> get(int namespace, Serializable key, int expireTime) {
+		Result<DataEntry> result = get(namespace, key);
+		if (result.isSuccess()) {
+			put(namespace, key, (Serializable)result.getValue().getValue(), result.getValue().getVersion(), expireTime);
+		}
+		return result;
+	}
+
+	public ResultCode putAsync(int namespace, Serializable key, Serializable value, int version, int expireTime,
+			boolean fillCache, TairCallback cb) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode put(int namespace, Serializable key, Serializable value, int version, int expireTime, boolean fillCache) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode invalid(int namespace, Serializable key, CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode hide(int namespace, Serializable key) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode hideByProxy(int namespace, Serializable key) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode hideByProxy(int namespace, Serializable key, CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<DataEntry> getHidden(int namespace, Serializable key) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode prefixPut(int namespace, Serializable pkey, Serializable skey, Serializable value) {
+		return prefixPut(namespace, pkey, skey, value, 0);
+	}
+
+	public ResultCode prefixPut(int namespace, Serializable pkey, Serializable skey, Serializable value, int version) {
+		return prefixPut(namespace, pkey, skey, value, version, 0);
+	}
+
+	public ResultCode prefixPut(int namespace, Serializable pkey, Serializable sKey, Serializable value, int version,
+			int expireTime) {
+		return put(namespace, pkey, sKey, value, version, expireTime);
+	}
+
+	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks) {
+		return prefixPuts(namespace, pkey, keyValuePacks, null);
+	}
+
+	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks,
+			List<KeyCountPack> keyCountPacks) {
+		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
+			return new Result<Map<Object,ResultCode>>(ResultCode.NSERROR);
+		}
+		RequestPrefixPutsPacket packet = new RequestPrefixPutsPacket(transcoder);
+		packet.setNamespace((short) namespace);
+		packet.setPkey(pkey);
+		packet.setKeyList(keyValuePacks);
+		packet.setKeyCountList(keyCountPacks);
+		int ec = packet.encode();
+		if (ec == 1) {
+			return new Result<Map<Object,ResultCode>>(ResultCode.KEYTOLARGE);
+		} else if (ec == 2) {
+			return new Result<Map<Object,ResultCode>>(ResultCode.VALUETOLARGE);
+		} else if (ec == 3) {
+			return new Result<Map<Object,ResultCode>>(ResultCode.SERIALIZEERROR);
+		} else if (ec == 4) {
+			return new Result<Map<Object,ResultCode>>(ResultCode.INVALIDARG);
+		}
+		ResultCode rc = ResultCode.CONNERROR;
+		BasePacket returnPacket = sendRequest(pkey, packet);
+
+		if ((returnPacket != null) && returnPacket instanceof MultiReturnPacket) {
+			MultiReturnPacket r = (MultiReturnPacket) returnPacket;
+			if (log.isDebugEnabled()) {
+				log.debug("get multi return packet: " + returnPacket + ", code="
+						+ r.getCode() + ", msg=" + r.getMsg());
+			}
+
+			rc = ResultCode.valueOf(r.getCode());
+
+			configServer.checkConfigVersion(r.getConfigVersion());
+		}
+
+		return new Result<Map<Object,ResultCode>>(rc);
+	}
+
+	public Result<DataEntry> prefixGet(int namespace, Serializable pkey, Serializable skey) {
+		return get(namespace, pkey, skey);
+	}
+
+	public Result<Map<Object, Result<DataEntry>>> prefixGets(int namespace, Serializable pkey,
+			List<? extends Serializable> skeyList) {
+		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
+			return new Result<Map<Object,Result<DataEntry>>>(ResultCode.NSERROR);
+		}
+
+		RequestPrefixGetPacket packet = new RequestPrefixGetPacket(transcoder);
+
+		packet.setNamespace((short) namespace);
+		packet.setPkey(pkey);
+		for (Serializable serializable : skeyList) {
+			packet.addKey(serializable);
+		}
+
+		int ec = packet.encode();
+		if (ec == 1) {
+			return new Result<Map<Object,Result<DataEntry>>>(ResultCode.KEYTOLARGE);
+		}
+
+		ResultCode rc = ResultCode.CONNERROR;
+		BasePacket returnPacket = sendRequest(pkey, packet, true);
+
+		if ((returnPacket != null) && returnPacket instanceof ResponsePrefixGetsPacket) {
+			ResponsePrefixGetsPacket r = (ResponsePrefixGetsPacket) returnPacket;
+			Map<Object,Result<DataEntry>> resultObject = new HashMap<Object, Result<DataEntry>>();
+			List<DataEntry> entryList = r.getEntryList();
+			rc = ResultCode.valueOf(r.getResultCode());
+			Result<Map<Object, Result<DataEntry>>> result = new Result<Map<Object,Result<DataEntry>>>(rc, resultObject);
+			if (entryList != null && entryList.size() > 0) {
+				for (int i = 0; i < entryList.size(); i++) {
+					resultObject.put(entryList.get(i).getKey(), new Result<DataEntry>(ResultCode.valueOf(entryList.get(i).getReturnCode()), entryList.get(i)));
+				}
+			}
+			List<DataEntry> failedList = r.getFailedKeyList();
+			if (failedList != null && failedList.size() > 0) {
+				for (int i = 0; i < failedList.size(); i++) {
+					resultObject.put(failedList.get(i).getKey(), new Result<DataEntry>(ResultCode.valueOf(failedList.get(i).getReturnCode()), null));
+				}
+			}
+			configServer.checkConfigVersion(r.getConfigVersion());
+			return result;
+		}
+
+		return new Result<Map<Object,Result<DataEntry>>>(rc);
+	}
+
+	public ResultCode prefixDelete(int namespace, Serializable pkey, Serializable sKey) {
+		return delete(namespace, pkey, sKey);
+	}
+
+	public ResultCode prefixDeletes(int namespace, Serializable pkey, List<? extends Serializable> skeys) {
+		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
+			return ResultCode.NSERROR;
+		}
+
+		RequestPrefixRemovesPacket packet = new RequestPrefixRemovesPacket(transcoder);
+
+		packet.setNamespace((short) namespace);
+		packet.setPkey(pkey);
+		for (Serializable key : skeys) {
+			packet.addKey(key);
+		}
+
+		int ec = packet.encode();
+
+		if (ec == 1) {
+			return ResultCode.KEYTOLARGE;
+		}
+
+		ResultCode rc = ResultCode.CONNERROR;
+		BasePacket returnPacket = sendRequest(pkey, packet);
+
+		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
+			rc = ResultCode.valueOf(((ReturnPacket) returnPacket).getCode());
+		}
+
+		return rc;
+	}
+
+	public Result<Integer> prefixIncr(int namespace, Serializable pkey, Serializable skey, int value, int defaultValue,
+			int expireTime) {
+		return addCount(namespace, pkey, skey, value, defaultValue, expireTime);
+	}
+
+	public Result<Integer> prefixIncr(int namespace, Serializable pkey, Serializable skey, int value, int defaultValue,
+			int expireTime, int lowBound, int upperBound) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, Result<Integer>>> prefixIncrs(int namespace, Serializable pkey, List<CounterPack> packList) {
+		Map<Object, Result<Integer>> result = new HashMap<Object, Result<Integer>>();
+		ResultCode rc = ResultCode.INVALIDARG;
+		if (packList != null && packList.size() > 0) {
+			for (CounterPack counterPack : packList) {
+				Result<Integer> r = prefixIncr(namespace, pkey, (Serializable) counterPack.getKey(), counterPack.getCount(), counterPack.getInitValue(), counterPack.getExpire());
+				result.put(counterPack.getKey(), r);
+				rc = ResultCode.valueOf(rc.getCode());
+			}
+		}
+		return new Result<>(rc, result);
+	}
+
+	public Result<Map<Object, Result<Integer>>> prefixIncrs(int namespace, Serializable pkey, List<CounterPack> packList,
+			int lowBound, int upperBound) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Integer> prefixDecr(int namespace, Serializable pkey, Serializable skey, int value, int defaultValue,
+			int expireTime) {
+		return addCount(namespace, pkey, skey, -value, defaultValue, expireTime);
+	}
+
+	public Result<Integer> prefixDecr(int namespace, Serializable pkey, Serializable skey, int value, int defaultValue,
+			int expireTime, int lowBound, int upperBound) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, Result<Integer>>> prefixDecrs(int namespace, Serializable pkey, List<CounterPack> packList) {
+		Map<Object, Result<Integer>> result = new HashMap<Object, Result<Integer>>();
+		ResultCode rc = ResultCode.INVALIDARG;
+		if (packList != null && packList.size() > 0) {
+			for (CounterPack counterPack : packList) {
+				Result<Integer> r = prefixDecr(namespace, pkey, (Serializable) counterPack.getKey(), -counterPack.getCount(), counterPack.getInitValue(), counterPack.getExpire());
+				result.put(counterPack.getKey(), r);
+				rc = ResultCode.valueOf(rc.getCode());
+			}
+		}
+		return new Result<>(rc, result);
+	}
+
+	public Result<Map<Object, Result<Integer>>> prefixDecrs(int namespace, Serializable pkey, List<CounterPack> packList,
+			int lowBound, int upperBound) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode prefixSetCount(int namespace, Serializable pkey, Serializable skey, int count) {
+		return prefixSetCount(namespace, pkey, skey, count, 0, 0);
+	}
+
+	public ResultCode prefixSetCount(int namespace, Serializable pkey, Serializable skey, int count, int version, int expireTime) {
+		return put(namespace, pkey, skey, new DataAddCountEntry(count), version, expireTime, (byte)1);
+	}
+
+	public Result<Map<Object, ResultCode>> prefixSetCounts(int namespace, Serializable pkey, List<KeyCountPack> keyCountPacks) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public ResultCode prefixHide(int namespace, Serializable pkey, Serializable skey) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<DataEntry> prefixGetHidden(int namespace, Serializable pkey, Serializable skey) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, Result<DataEntry>>> prefixGetHiddens(int namespace, Serializable pkey,
+			List<? extends Serializable> skeys) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, ResultCode>> prefixHides(int namespace, Serializable pkey, List<? extends Serializable> skeys) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode prefixInvalid(int namespace, Serializable pkey, Serializable skey, CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode prefixHideByProxy(int namespace, Serializable pkey, Serializable skey, CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, ResultCode>> prefixHidesByProxy(int namespace, Serializable pkey,
+			List<? extends Serializable> skeys, CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, ResultCode>> prefixInvalids(int namespace, Serializable pkey, List<? extends Serializable> skeys,
+			CallMode callMode) {
+		throw new UnsupportedOperationException();
+	}
+
+	public Result<Map<Object, Map<Object, Result<DataEntry>>>> mprefixGetHiddens(int namespace,
+			Map<? extends Serializable, ? extends List<? extends Serializable>> pkeySkeyListMap) {
+		throw new UnsupportedOperationException();
+	}
+
+	public ResultCode setCount(int namespace, Serializable key, int count) {
+		return setCount(namespace, key, count, 0, 0);
+	}
+
+	public ResultCode setCount(int namespace, Serializable key, int count, int version, int expireTime) {
+		return put(namespace, null, key, new DataAddCountEntry(count), version, expireTime, (byte)1);
+	}
+	
+	public ResultCode lock(int namespace, Serializable key) {
+		return lock(namespace, null, key);
+	}
+	
+	public ResultCode lock(int namespace, Serializable prefix, Serializable key) {
+		return lock(namespace, prefix, key, TairConstant.TAIR_LOCK_VALUE);
+	}
+
+	private ResultCode lock(int namespace, Serializable prefix, Serializable key, int lockType) {
+		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
+			return ResultCode.NSERROR;
+		}
+
+		RequestLockPacket packet = new RequestLockPacket(transcoder);
+		packet.setNamespace((short)namespace);
+		packet.setLockType(lockType);
+		packet.setPkey(prefix);
+		packet.setKey(key);
+
+		int ec = packet.encode();
+		if (ec == 4) {
+			return ResultCode.INVALIDARG;
+		} else if (ec == 3) {
+			return ResultCode.SERIALIZEERROR;
+		}
+
+		ResultCode rc = ResultCode.CONNERROR;
+		BasePacket returnPacket = sendRequest(prefix == null ? key : prefix, packet, true);
+
+		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
+			ReturnPacket r = (ReturnPacket) returnPacket;
+			configServer.checkConfigVersion(r.getConfigVersion());
+			return ResultCode.valueOf(r.getCode());
+		}
+
+		return rc;
+	}
+
+	public ResultCode unlock(int namespace, Serializable key) {
+		return unlock(namespace, null, key);
+	}
+	
+	public ResultCode unlock(int namespace, Serializable prefix, Serializable key) {
+		return lock(namespace, prefix, key, TairConstant.TAIR_LOCK_VALUE_UNLOCK);
+	}
+
+	public Result<List<Object>> mlock(int namespace, List<? extends Object> keys) {
+		return mlock(namespace, keys, null);
+	}
+
+	public Result<List<Object>> mlock(int namespace, List<? extends Object> keys, Map<Object, ResultCode> failKeysMap) {
+		return mlock(namespace, keys, failKeysMap, TairConstant.TAIR_LOCK_VALUE);
+	}
+	private Result<List<Object>> mlock(int namespace, List<? extends Object> keys, Map<Object, ResultCode> failKeysMap, int lockType) {
+		ArrayList<Object> succList = new ArrayList<Object>();
+		for (Object key : keys) {
+			ResultCode result = lock(namespace, null, (Serializable)key, lockType);
+			if (!result.isSuccess() && failKeysMap != null) {
+				failKeysMap.put(key, result);
+			} else {
+				succList.add(key);
+			}
+		}
+		return new Result<List<Object>>(ResultCode.SUCCESS, succList);
+	}
+
+	@Override
+	public Result<List<Object>> munlock(int namespace, List<? extends Object> keys) {
+		return munlock(namespace, keys, null);
+	}
+
+	public Result<List<Object>> munlock(int namespace, List<? extends Object> keys, Map<Object, ResultCode> failKeysMap) {
+		return mlock(namespace, keys, failKeysMap, TairConstant.TAIR_LOCK_VALUE_UNLOCK);
+	}
+
+	public ResultCode append(int namespace, byte[] key, byte[] value) {
+		throw new UnsupportedOperationException();
+	}
+
+	public void setMaxFailCount(int failCount) {
+		throw new UnsupportedOperationException();
+	}
+
+	public int getMaxFailCount() {
+		throw new UnsupportedOperationException();
 	}
 }

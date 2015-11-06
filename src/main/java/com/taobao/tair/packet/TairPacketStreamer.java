@@ -41,6 +41,10 @@ public class TairPacketStreamer implements PacketStreamer {
             case TairConstant.TAIR_RESP_GET_PACKET:
                 packet = new ResponseGetPacket(transcoder);
                 break;
+                
+            case TairConstant.TAIR_RESP_GET_RANGE_PACKET:
+            	packet = new ResponseGetRangePacket(transcoder);
+            	break;
 
             case TairConstant.TAIR_RESP_INCDEC_PACKET:
                 packet = new ResponseIncDecPacket(transcoder);
@@ -53,6 +57,12 @@ public class TairPacketStreamer implements PacketStreamer {
             	break;
             case TairConstant.TAIR_RESP_QUERY_INFO_PACKET:
             	packet = new ResponseQueryInfoPacket(transcoder);
+            	break;
+            case TairConstant.TAIR_RESP_MRETURN_PACKET:
+            	packet = new MultiReturnPacket(transcoder);
+            	break;
+            case TairConstant.TAIR_RESP_PREFIX_GETS_PACKET:
+            	packet = new ResponsePrefixGetsPacket(transcoder);
             	break;
 
             default:

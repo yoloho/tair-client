@@ -8,46 +8,60 @@
  */
 package com.taobao.tair.packet;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import com.taobao.tair.DataEntry;
 import com.taobao.tair.comm.Transcoder;
 import com.taobao.tair.etc.TairConstant;
 
-public class RequestGetPacket extends BasePacket {
+public class RequestPrefixGetPacket extends BasePacket {
 	protected short namespace;
-	protected Object pkey = null;
+	protected Object pkey;
 	protected Set<Object> keyList = new HashSet<Object>();
 
-	public RequestGetPacket(Transcoder transcoder) {
+	public RequestPrefixGetPacket(Transcoder transcoder) {
 		super(transcoder);
-		this.pcode = TairConstant.TAIR_REQ_GET_PACKET;
+		this.pcode = TairConstant.TAIR_REQ_PREFIX_GETS_PACKET;
 	}
 
 	/**
 	 * encode
 	 */
 	public int encode() {
-		writePacketBegin(1060 * keyList.size());
+		int capacity = 0;
+		List<byte[]> list = new ArrayList<byte[]>();
+
+		byte[] pkey_data = transcoder.encode(pkey);
+		capacity += 40;
+		capacity += pkey_data.length;
+		for (Object key : keyList) {
+			byte[] keyByte = transcoder.encode(key);
+
+			if (keyByte.length >= TairConstant.TAIR_KEY_MAX_LENTH) {
+				return 1;
+			}
+
+			list.add(keyByte);
+			capacity += 40;
+			capacity += keyByte.length;
+		}
+
+		writePacketBegin(capacity);
 
 		// body
 		byteBuffer.put((byte) 0);
 		byteBuffer.putShort(namespace);
-		byteBuffer.putInt(keyList.size());
+		byteBuffer.putInt(list.size());
 
-		for (Object key : keyList) {
-			DataEntry entry = new DataEntry(key, null);
-			entry.setPkey(pkey);
-			int rc;
-			try {
-				rc = entry.encode(byteBuffer, transcoder);
-			} catch (Throwable e) {
-				return 3;
-			}
-			if (rc != 0) {
-				return rc;
-			}
+		for (byte[] keyByte : list) {
+			fillMetas();
+			DataEntry.encodeMeta(byteBuffer);
+			byteBuffer.putInt((keyByte.length + pkey_data.length) | pkey_data.length << 22);
+			byteBuffer.put(pkey_data);
+			byteBuffer.put(keyByte);
 		}
 		writePacketEnd();
 
@@ -59,6 +73,14 @@ public class RequestGetPacket extends BasePacket {
 	 */
 	public boolean decode() {
 		throw new UnsupportedOperationException();
+	}
+
+	public Object getPkey() {
+		return pkey;
+	}
+
+	public void setPkey(Object pkey) {
+		this.pkey = pkey;
 	}
 
 	public boolean addKey(Object key) {
@@ -80,14 +102,6 @@ public class RequestGetPacket extends BasePacket {
 	 */
 	public void setKeyList(Set<Object> keyList) {
 		this.keyList = keyList;
-	}
-
-	public Object getPkey() {
-		return pkey;
-	}
-
-	public void setPkey(Object pkey) {
-		this.pkey = pkey;
 	}
 
 	/**

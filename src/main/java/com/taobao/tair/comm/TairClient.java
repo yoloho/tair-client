@@ -120,7 +120,6 @@ public class TairClient {
 					+ System.currentTimeMillis());
 			LOGGER.debug("current responses size: " + responses.size());
 		}
-		
 		// do decode here
 		if (response instanceof BasePacket) {
 			((BasePacket)response).decode();

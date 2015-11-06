@@ -18,6 +18,9 @@ public class RequestPutPacket extends BasePacket {
 	protected int expired;
 	protected Object key;
 	protected Object data;
+	protected Object pkey;
+	protected byte flag;
+	protected boolean is_raw;
 
 	public RequestPutPacket(Transcoder transcoder) {
 		super(transcoder);
@@ -28,24 +31,7 @@ public class RequestPutPacket extends BasePacket {
 	 * encode
 	 */
 	public int encode(){
-		byte[] keyByte = null;
-		byte[] dataByte = null;
-		try {
-			keyByte = transcoder.encode(key);
-			dataByte = transcoder.encode(data);
-		} catch (Throwable e) {
-			return 3; // serialize error
-		}
-
-		if (keyByte.length >= TairConstant.TAIR_KEY_MAX_LENTH) {
-			return 1;
-		}
-
-		if (dataByte.length >= TairConstant.TAIR_VALUE_MAX_LENGTH) {
-			return 2;
-		}
-
-		writePacketBegin(keyByte.length + dataByte.length);
+		writePacketBegin(2000);
 
 		// body
 		byteBuffer.put((byte) 0);
@@ -53,18 +39,18 @@ public class RequestPutPacket extends BasePacket {
 		byteBuffer.putShort(version);
 		byteBuffer.putInt(expired);
 
-		fillMetas();
-		DataEntry.encodeMeta(byteBuffer);
-		byteBuffer.putInt(keyByte.length);
-		byteBuffer.put(keyByte);
-
-		fillMetas();
-		DataEntry.encodeMeta(byteBuffer);
-		byteBuffer.putInt(dataByte.length);
-		byteBuffer.put(dataByte);
+		DataEntry entry = new DataEntry(key, data);
+		entry.setPkey(pkey);
+		entry.setValueFlag(flag);
+		entry.setRawValue(is_raw);
+		try {
+			int rc = entry.encode(byteBuffer, transcoder);
+			if (rc != 0) return rc;
+		} catch (Throwable e) {
+			return 3;
+		}
 
 		writePacketEnd();
-
 		return 0;
 	}
 
@@ -105,6 +91,14 @@ public class RequestPutPacket extends BasePacket {
 		this.expired = expired;
 	}
 
+	public boolean isIsRaw() {
+		return is_raw;
+	}
+
+	public void setIsRaw(boolean is_raw) {
+		this.is_raw = is_raw;
+	}
+
 	/**
 	 * @return the key
 	 */
@@ -120,6 +114,14 @@ public class RequestPutPacket extends BasePacket {
 		this.key = key;
 	}
 
+	public byte getFlag() {
+		return flag;
+	}
+
+	public void setFlag(byte flag) {
+		this.flag = flag;
+	}
+
 	/**
 	 * @return the namespace
 	 */
@@ -133,6 +135,14 @@ public class RequestPutPacket extends BasePacket {
 	 */
 	public void setNamespace(short namespace) {
 		this.namespace = namespace;
+	}
+
+	public Object getPkey() {
+		return pkey;
+	}
+
+	public void setPkey(Object pkey) {
+		this.pkey = pkey;
 	}
 
 	/**

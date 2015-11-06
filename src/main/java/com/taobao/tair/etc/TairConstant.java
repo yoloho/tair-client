@@ -17,9 +17,34 @@ public class TairConstant {
     public static final int TAIR_REQ_PUT_PACKET    = 1;
     public static final int TAIR_REQ_GET_PACKET    = 2;
     public static final int TAIR_REQ_REMOVE_PACKET = 3;
-    public static final int TAIR_REQ_INVALID_PACKET = 12;
+    public static final int TAIR_REQ_REMOVE_AREA   = 4;
+    public static final int TAIR_REQ_PING_PACKET = 6;
     public static final int TAIR_REQ_INCDEC_PACKET = 11;
+    public static final int TAIR_REQ_LOCK_PACKET = 14;
+    public static final int TAIR_REQ_MPUT_PACKET = 15;
+    public static final int TAIR_REQ_OP_CMD_PACKET   = 16;
+    public static final int TAIR_RESP_OP_CMD_PACKET   = 17;
     public static final int TAIR_REQ_GET_RANGE_PACKET = 18;
+    public static final int TAIR_RESP_GET_RANGE_PACKET = 19;
+    
+    public static final int TAIR_REQ_HIDE_PACKET = 20;
+    public static final int TAIR_REQ_HIDE_BY_PROXY_PACKET = 21;
+    public static final int TAIR_REQ_GET_HIDDEN_PACKET = 22;
+    public static final int TAIR_REQ_INVALID_PACKET = 23;
+    public static final int TAIR_REQ_PREFIX_PUTS_PACKET = 24;
+    public static final int TAIR_REQ_PREFIX_REMOVES_PACKET = 25;
+    public static final int TAIR_REQ_PREFIX_INCDEC_PACKET = 26;
+    public static final int TAIR_RESP_PREFIX_INCDEC_PACKET = 27;
+    public static final int TAIR_RESP_MRETURN_PACKET = 28;
+    public static final int TAIR_REQ_PREFIX_GETS_PACKET = 29;
+    public static final int TAIR_RESP_PREFIX_GETS_PACKET = 30;
+    public static final int TAIR_REQ_PREFIX_HIDES_PACKET = 31;
+    public static final int TAIR_REQ_PREFIX_INVALIDS_PACKET = 32;
+    public static final int TAIR_REQ_PREFIX_HIDES_BY_PROXY_PACKET = 33;
+    public static final int TAIR_REQ_PREFIX_GET_HIDDENS_PACKET = 34;
+
+    public static final int TAIR_REQ_SIMPLE_GET_PACKET = 36;
+    public static final int TAIR_RESP_SIMPLE_GET_PACKET = 37;
 
     // response
     public static final int TAIR_RESP_RETURN_PACKET = 101;
@@ -32,6 +57,8 @@ public class TairConstant {
     public static final int TAIR_REQ_QUERY_INFO_PACKET = 1009;
     public static final int TAIR_RESP_QUERY_INFO_PACKET = 1106;
     
+    public static final int TAIR_RESP_FEEDBACK_PACKET = 1113;
+    
     // items
     public static final int TAIR_REQ_ADDITEMS_PACKET = 1400;
     public static final int TAIR_REQ_GETITEMS_PACKET = 1401;
@@ -39,6 +66,18 @@ public class TairConstant {
     public static final int TAIR_REQ_GETANDREMOVEITEMS_PACKET = 1403;
     public static final int TAIR_REQ_GETITEMSCOUNT_PACKET = 1404;
     public static final int TAIR_RESP_GETITEMS_PACKET = 1405;
+    
+    public static final int TAIR_REQ_GET_EXPIRE_PACKET = 1600;
+    public static final int TAIR_RESP_GET_EXPIRE_EACKET = 1601;
+    public static final int TAIR_REQ_PUT_MODIFY_DATE_PACKET = 1700;
+    public static final int TAIR_REQ_GET_MODIFY_DATE_PACKET = 1702;
+    public static final int TAIR_RESP_GET_MODIFY_DATE_PACKET = 1703;
+
+    public static final int TAIR_REQ_INC_DEC_BOUNDED_PACKET = 1704;
+    public static final int TAIR_RESP_INC_DEC_BOUNDED_PACKET = 1705;
+    
+    public static final int TAIR_REQ_PREFIX_INCDEC_BOUNDED_PACKET = 1706;
+    public static final int TAIR_RESP_PREFIX_INCDEC_BOUNDED_PACKET = 1707;
     
     // serialize type
     public static final int TAIR_STYPE_INT = 1;
@@ -82,6 +121,15 @@ public class TairConstant {
     public static final int Q_DATA_SEVER_INFO  = 3;
     public static final int Q_GROUP_INFO  = 4;
     public static final int Q_STAT_INFO  = 5;
-   
+    
+    public static final short TAIR_GET_RANGE_ALL = 1;
+    public static final short TAIR_GET_RANGE_ONLY_VALUE = 2;
+    public static final short TAIR_GET_RANGE_ONLY_KEY = 3;
+    
+    public static final short TAIR_LOCK_NONE = 0;
+    public static final short TAIR_LOCK_STATUS = 1;
+    public static final short TAIR_LOCK_VALUE = 2;
+    public static final short TAIR_LOCK_VALUE_UNLOCK = 3;
+    public static final short TAIR_LOCK_PUT_AND_LOCK_VALUE = 4;
        
 }

@@ -21,7 +21,7 @@ import java.util.zip.InflaterInputStream;
 
 public class TairUtil {
 	public static final String HEXES = "0123456789ABCDEF";
-	public static final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+	public static final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
 	public static void checkMalloc(int size) {
 		if (size > TairConstant.TAIR_MALLOC_MAX) {

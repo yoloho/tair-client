@@ -18,6 +18,7 @@ public class RequestIncDecPacket extends BasePacket {
 	private int initValue = 0;
 	private int expireTime = 0;
 	private Object key = null;
+	private Object pkey = null;
 
 	public RequestIncDecPacket(Transcoder transcoder) {
 		super(transcoder);
@@ -43,10 +44,13 @@ public class RequestIncDecPacket extends BasePacket {
 		byteBuffer.putInt(initValue);
 		byteBuffer.putInt(expireTime);
 		
-		fillMetas();
-		DataEntry.encodeMeta(byteBuffer);
-		byteBuffer.putInt(keyByte.length);
-		byteBuffer.put(keyByte);
+		DataEntry entry = new DataEntry(key, null);
+		entry.setPkey(pkey);
+		try {
+			entry.encode(byteBuffer, transcoder);
+		} catch (Throwable e) {
+			return 3;
+		}
 
 		writePacketEnd();
 
@@ -58,6 +62,14 @@ public class RequestIncDecPacket extends BasePacket {
 	 */
 	public boolean decode() {
 		throw new UnsupportedOperationException();
+	}
+
+	public Object getPkey() {
+		return pkey;
+	}
+
+	public void setPkey(Object pkey) {
+		this.pkey = pkey;
 	}
 
 	/**

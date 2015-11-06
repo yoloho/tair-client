@@ -8,17 +8,22 @@
  */
 package com.taobao.tair.packet;
 
+import java.util.HashMap;
+
+import com.taobao.tair.DataEntry;
+import com.taobao.tair.ResultCode;
 import com.taobao.tair.comm.Transcoder;
 import com.taobao.tair.etc.TairConstant;
 
-public class ReturnPacket extends BasePacket {
+public class MultiReturnPacket extends BasePacket {
     private int    configVersion = 0;
     private int    code = 0;
     private String msg  = null;
+    private HashMap<Object, ResultCode> returnHash = new HashMap<Object, ResultCode>();
 
-    public ReturnPacket(Transcoder transcoder) {
+    public MultiReturnPacket(Transcoder transcoder) {
         super(transcoder);
-        this.pcode = TairConstant.TAIR_RESP_RETURN_PACKET;
+        this.pcode = TairConstant.TAIR_RESP_MRETURN_PACKET;
     }
 
     public int encode() {
@@ -31,7 +36,6 @@ public class ReturnPacket extends BasePacket {
         writeString(this.msg);
         writePacketEnd();
 
-        dumpBytes(byteBuffer.array());
         return 0;
     }
 
@@ -44,10 +48,30 @@ public class ReturnPacket extends BasePacket {
         this.configVersion = byteBuffer.getInt();
         this.code          = byteBuffer.getInt();
         this.msg           = readString();
+        int count          = byteBuffer.getInt();
+        returnHash = new HashMap<Object, ResultCode>();
+        if (count > 0) {
+        	for (int i = 0; i < count; i++) {
+				DataEntry entry = new DataEntry();
+				entry.decodeKey(byteBuffer, transcoder);
+				int return_code = byteBuffer.getInt();
+				returnHash.put(entry.getKey(), ResultCode.valueOf(return_code));
+			}
+        }
         return true;
     }
+    
+    
 
-    /**
+    public HashMap<Object, ResultCode> getReturnHash() {
+		return returnHash;
+	}
+
+	public void setReturnHash(HashMap<Object, ResultCode> returnHash) {
+		this.returnHash = returnHash;
+	}
+
+	/**
      * 
      * @return the code
      */

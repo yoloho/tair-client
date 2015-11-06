@@ -8,17 +8,16 @@
  */
 package com.taobao.tair.etc;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class TranscoderUtil {
     private static final Log log = LogFactory.getLog(TranscoderUtil.class);
@@ -55,6 +54,16 @@ public class TranscoderUtil {
         fg[2] = (byte) ((number >> 8) & 0xFF);
         fg[1] = (byte) ((number >> 16) & 0xFF);
         fg[0] = (byte) ((number >> 24) & 0xFF);
+        return fg;
+    }
+    
+    public static byte[] encodeCounter(int number) {
+        byte[] fg = new byte[4];
+
+        fg[0] = (byte) (number & 0xFF);
+        fg[1] = (byte) ((number >> 8) & 0xFF);
+        fg[2] = (byte) ((number >> 16) & 0xFF);
+        fg[3] = (byte) ((number >> 24) & 0xFF);
         return fg;
     }
 
@@ -233,7 +242,6 @@ public class TranscoderUtil {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-
         return rv;
     }
 }

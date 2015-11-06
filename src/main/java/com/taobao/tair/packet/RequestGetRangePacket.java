@@ -17,8 +17,17 @@ public class RequestGetRangePacket extends BasePacket {
 	protected short cmd = 0;
 	protected int offset = 0;
 	protected int limit = 0;
-	protected DataEntry keyStart;
-	protected DataEntry keyEnd;
+	protected Object keyStart;
+	protected Object keyEnd;
+	protected Object pkey;
+
+	public Object getPkey() {
+		return pkey;
+	}
+
+	public void setPkey(Object pkey) {
+		this.pkey = pkey;
+	}
 
 	public RequestGetRangePacket(Transcoder transcoder) {
 		super(transcoder);
@@ -36,9 +45,22 @@ public class RequestGetRangePacket extends BasePacket {
 		byteBuffer.putShort(namespace);
 		byteBuffer.putInt(offset);
 		byteBuffer.putInt(limit);
-		keyStart.encodeMeta(byteBuffer);
-		keyEnd.encodeMeta(byteBuffer);
-
+		try {
+			DataEntry skey = new DataEntry(keyStart, null);
+			skey.setPkey(pkey);
+			int rc = skey.encode(byteBuffer, transcoder);
+			if (rc != 0) {
+				return rc;
+			}
+			DataEntry ekey = new DataEntry(keyEnd, null);
+			ekey.setPkey(pkey);
+			rc = ekey.encode(byteBuffer, transcoder);
+			if (rc != 0) {
+				return rc;
+			}
+		} catch (Throwable e) {
+			return 3;
+		}
 		writePacketEnd();
 
 		return 0;
@@ -75,19 +97,19 @@ public class RequestGetRangePacket extends BasePacket {
 		this.limit = limit;
 	}
 
-	public DataEntry getKeyStart() {
+	public Object getKeyStart() {
 		return keyStart;
 	}
 
-	public void setKeyStart(DataEntry keyStart) {
+	public void setKeyStart(Object keyStart) {
 		this.keyStart = keyStart;
 	}
 
-	public DataEntry getKeyEnd() {
+	public Object getKeyEnd() {
 		return keyEnd;
 	}
 
-	public void setKeyEnd(DataEntry keyEnd) {
+	public void setKeyEnd(Object keyEnd) {
 		this.keyEnd = keyEnd;
 	}
 

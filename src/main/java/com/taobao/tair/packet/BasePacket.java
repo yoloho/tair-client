@@ -207,4 +207,10 @@ public class BasePacket {
     	byte[] data = new byte[7];
 		byteBuffer.put(data);
 	}
+    void dumpBytes(byte[] data) {
+    	for (int i = 0; i < data.length; i++) {
+			System.out.printf("%02x ", data[i]);
+		}
+    	System.out.println();
+    }
 }

@@ -42,6 +42,8 @@ public class ResultCode {
 	public static final ResultCode VALUETOLARGE = new ResultCode(-6, "value length error");
 	public static final ResultCode NSERROR = new ResultCode(-7, "namsepace range error, should between 0 ~ 1023");
 	public static final ResultCode ITEMTOLARGE = new ResultCode(-8, "item length error, shoud less than " + TairConstant.TAIR_ITEM_MAX_SIZE);
+	public static final ResultCode LOCK_NONEXIST = new ResultCode(-3974, "this lock doesn't exist");
+	public static final ResultCode LOCK_EXIST = new ResultCode(-3975, "already locked");
 
 
 	/**
@@ -107,6 +109,10 @@ public static ResultCode valueOf(int code) {
 			return PARTITEM;
 		case -3977:
 			return NSUNALLOC;
+		case -3974:
+			return LOCK_NONEXIST;
+		case -3975:
+			return LOCK_EXIST;
 		default:
 			return UNKNOW;
 		}

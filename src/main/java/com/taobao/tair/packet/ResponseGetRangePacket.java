@@ -8,22 +8,24 @@
  */
 package com.taobao.tair.packet;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.taobao.tair.DataEntry;
 import com.taobao.tair.comm.Transcoder;
 import com.taobao.tair.etc.TairConstant;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ResponseGetRangePacket extends BasePacket {
 	protected int configVersion;
 	protected List<DataEntry> entryList;
 	protected List<DataEntry> proxiedKeyList;
 	protected int resultCode;
+	protected short cmd;
+	protected short flag;
 
 	public ResponseGetRangePacket(Transcoder transcoder) {
 		super(transcoder);
-		this.pcode = TairConstant.TAIR_RESP_GET_PACKET;
+		this.pcode = TairConstant.TAIR_RESP_GET_RANGE_PACKET;
 	}
 
 	/**
@@ -39,30 +41,29 @@ public class ResponseGetRangePacket extends BasePacket {
 	public boolean decode() {
 		this.configVersion = byteBuffer.getInt();
 		resultCode = byteBuffer.getInt();
-		short cmd = byteBuffer.getShort();
+		cmd = byteBuffer.getShort();
 		int count = byteBuffer.getInt();
-		short flag = byteBuffer.getShort();
-
-		int size = 0;
-		Object key = null;
-		Object value = null;
+		flag = byteBuffer.getShort();
 
 		this.entryList = new ArrayList<DataEntry>(count);
-
-		for (int i = 0; i < count; i++) {
-			DataEntry de = new DataEntry();
-			removeMetas();
-			de.decodeMeta(byteBuffer);
-
-			size = byteBuffer.getInt();
-
-			if (size > 0) {
-				key = transcoder.decode(byteBuffer.array(), byteBuffer
-						.position(), size);
-				byteBuffer.position(byteBuffer.position() + size);
+		if (cmd == TairConstant.TAIR_GET_RANGE_ALL) {
+			for (int i = 0; i < count; i += 2) {
+				DataEntry de = new DataEntry();
+				de.decodeKeyValue(byteBuffer, transcoder);
+				this.entryList.add(de);
 			}
-			de.setKey(key);
-			this.entryList.add(de);
+		} else if (cmd == TairConstant.TAIR_GET_RANGE_ONLY_KEY) {
+			for (int i = 0; i < count; i ++) {
+				DataEntry de = new DataEntry();
+				de.decodeKey(byteBuffer, transcoder);
+				this.entryList.add(de);
+			}
+		} else if (cmd == TairConstant.TAIR_GET_RANGE_ONLY_VALUE) {
+			for (int i = 0; i < count; i ++) {
+				DataEntry de = new DataEntry();
+				de.decodeValue(byteBuffer, transcoder);
+				this.entryList.add(de);
+			}
 		}
 
 		if (count > 1) {
@@ -70,6 +71,22 @@ public class ResponseGetRangePacket extends BasePacket {
 		}
 
 		return true;
+	}
+
+	public short getFlag() {
+		return flag;
+	}
+
+	public void setFlag(short flag) {
+		this.flag = flag;
+	}
+
+	public short getCmd() {
+		return cmd;
+	}
+
+	public void setCmd(short cmd) {
+		this.cmd = cmd;
 	}
 
 	public List<DataEntry> getEntryList() {

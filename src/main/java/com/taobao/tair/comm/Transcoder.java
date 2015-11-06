@@ -11,6 +11,7 @@ package com.taobao.tair.comm;
 public interface Transcoder { 
 
 	byte[] encode(Object object);
+	byte[] encode(Object object, boolean raw);
 
 	Object decode(byte[] data);
 
