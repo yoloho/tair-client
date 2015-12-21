@@ -9,10 +9,7 @@
 package com.taobao.tair.impl;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.logging.Log;
@@ -641,6 +638,11 @@ public class DefaultTairManager implements TairManager {
 
 	public void setConfigServerList(List<String> configServerList) {
 		this.configServerList = configServerList;
+	}
+	public void setConfigServers(String servers) {
+		String[] arr = servers.split(",");
+		this.configServerList = new ArrayList<String>();
+		Collections.addAll(this.configServerList, arr);
 	}
 
 	public String getGroupName() {
