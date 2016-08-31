@@ -31,7 +31,7 @@ public class RequestPutPacket extends BasePacket {
 	 * encode
 	 */
 	public int encode(){
-		writePacketBegin(2000);
+		writePacketBegin(3000);
 
 		// body
 		byteBuffer.put((byte) 0);
