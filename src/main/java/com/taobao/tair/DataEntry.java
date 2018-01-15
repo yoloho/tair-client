@@ -158,7 +158,7 @@ public class DataEntry implements Serializable {
 		bytes.putInt(de.edate);
 	}
 	
-	public int encode(ByteBuffer bytes, Transcoder transcoder) throws Throwable {
+	public int encode(ByteBuffer bytes, Transcoder transcoder) {
 		if (key != null) {
 			fillMetas(bytes);
 			encodeMeta(bytes);
@@ -192,7 +192,7 @@ public class DataEntry implements Serializable {
 		return 0;
 	}
 	
-	public static int encode(ByteBuffer bytes, Object key, Transcoder transcoder) throws Throwable {
+	public static int encode(ByteBuffer bytes, Object key, Transcoder transcoder) {
 		fillMetas(bytes);
 		encodeMeta(bytes);
 		byte[] data = transcoder.encode(key);

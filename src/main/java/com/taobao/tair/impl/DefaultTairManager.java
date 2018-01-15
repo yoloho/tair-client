@@ -518,13 +518,17 @@ public class DefaultTairManager implements TairManager {
 		packet.setVersion((short) version);
 		packet.setExpired(expireTime);
 
-		int ec = packet.encode();
-
-		if (ec == 1) {
-			return ResultCode.KEYTOLARGE;
-		} else if (ec == 2) {
-			return ResultCode.VALUETOLARGE;
-		} else if (ec == 3) {
+		try {
+			int ec = packet.encode();
+			if (ec == 1) {
+				return ResultCode.KEYTOLARGE;
+			} else if (ec == 2) {
+				return ResultCode.VALUETOLARGE;
+			} else if (ec == 3) {
+				return ResultCode.SERIALIZEERROR;
+			}
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
 			return ResultCode.SERIALIZEERROR;
 		}
 

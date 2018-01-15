@@ -43,11 +43,9 @@ public class RequestPutPacket extends BasePacket {
 		entry.setPkey(pkey);
 		entry.setValueFlag(flag);
 		entry.setRawValue(is_raw);
-		try {
-			int rc = entry.encode(byteBuffer, transcoder);
-			if (rc != 0) return rc;
-		} catch (Throwable e) {
-			return 3;
+		int rc = entry.encode(byteBuffer, transcoder);
+		if (rc != 0) {
+			return rc;
 		}
 
 		writePacketEnd();
