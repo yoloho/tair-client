@@ -30,19 +30,21 @@ public class RequestPutPacket extends BasePacket {
 	/**
 	 * encode
 	 */
+	@Override
 	public int encode(){
-		writePacketBegin(3000);
+
+		DataEntry entry = new DataEntry(key, data);
+		entry.setPkey(pkey);
+		entry.setValueFlag(flag);
+		entry.setRawValue(is_raw);
+
+		writePacketBegin(entry.size(transcoder));
 
 		// body
 		byteBuffer.put((byte) 0);
 		byteBuffer.putShort(namespace);
 		byteBuffer.putShort(version);
 		byteBuffer.putInt(expired);
-
-		DataEntry entry = new DataEntry(key, data);
-		entry.setPkey(pkey);
-		entry.setValueFlag(flag);
-		entry.setRawValue(is_raw);
 		int rc = entry.encode(byteBuffer, transcoder);
 		if (rc != 0) {
 			return rc;

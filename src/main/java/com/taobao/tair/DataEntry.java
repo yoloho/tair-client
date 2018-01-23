@@ -30,6 +30,10 @@ public class DataEntry implements Serializable {
 	private boolean raw_value = false;
 	private int return_code = 0;
 
+	private byte[] pkeyData;
+	private byte[] keyData;
+	private byte[] valueData;
+
 	// meta data
 
 	private int magic;
@@ -157,23 +161,36 @@ public class DataEntry implements Serializable {
 		bytes.putInt(de.mdate);
 		bytes.putInt(de.edate);
 	}
+
+	public int size(Transcoder transcoder) {
+		if (has_merged) {
+			pkeyData = transcoder.encode(pkey);
+		}
+		keyData = transcoder.encode(key);
+		valueData = transcoder.encode(value, raw_value);
+		return pkeyData == null ? keyData.length + valueData.length : pkeyData.length + keyData.length + valueData.length ;
+	}
 	
 	public int encode(ByteBuffer bytes, Transcoder transcoder) {
 		if (key != null) {
 			fillMetas(bytes);
 			encodeMeta(bytes);
-			byte[] data = transcoder.encode(key);
+			if (keyData == null) {
+				keyData = transcoder.encode(key);
+			}
 			if (has_merged) {
-				byte[] pdata = transcoder.encode(pkey);
-				if (data.length + pdata.length > TairConstant.TAIR_KEY_MAX_LENTH) {
+				if (pkeyData == null) {
+					pkeyData = transcoder.encode(pkey);
+				}
+				if (keyData.length + pkeyData.length > TairConstant.TAIR_KEY_MAX_LENTH) {
 					return 1;
 				}
-				bytes.putInt((data.length + pdata.length) | pdata.length << 22);
-				bytes.put(pdata);
+				bytes.putInt((keyData.length + pkeyData.length) | pkeyData.length << 22);
+				bytes.put(pkeyData);
 			} else {
-				bytes.putInt(data.length);
+				bytes.putInt(keyData.length);
 			}
-			bytes.put(data);
+			bytes.put(keyData);
 		}
 		if (value != null) {
 			fillMetas(bytes);
@@ -182,12 +199,14 @@ public class DataEntry implements Serializable {
 				int pos = bytes.position();
 				bytes.put(pos - 13, value_flag);
 			}
-			byte[] data = transcoder.encode(value, raw_value);
-			if (data.length > TairConstant.TAIR_VALUE_MAX_LENGTH) {
+			if (valueData == null) {
+				valueData = transcoder.encode(value, raw_value);
+			}
+			if (valueData.length > TairConstant.TAIR_VALUE_MAX_LENGTH) {
 				return 2;
 			}
-			bytes.putInt(data.length);
-			bytes.put(data);
+			bytes.putInt(valueData.length);
+			bytes.put(valueData);
 		}
 		return 0;
 	}
