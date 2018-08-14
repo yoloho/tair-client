@@ -184,7 +184,7 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(key, packet);
+		BasePacket returnPacket = sendRequest(pkey == null ? key : pkey, packet);
 
 		if ((returnPacket != null) && returnPacket instanceof ReturnPacket) {
 			rc = ResultCode.valueOf(((ReturnPacket) returnPacket).getCode());
