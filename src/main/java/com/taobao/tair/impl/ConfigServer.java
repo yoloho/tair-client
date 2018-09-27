@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.logging.Log;
@@ -31,6 +32,61 @@ import com.taobao.tair.packet.RequestQueryInfoPacket;
 import com.taobao.tair.packet.ResponseQueryInfoPacket;
 
 public class ConfigServer implements ResponseListener {
+    private static class Server {
+        private List<Long> addrList;
+        private List<Long> addrPreferedList;
+        public Server(int copyCount) {
+            addrList = new ArrayList<>(copyCount);
+            addrPreferedList = new ArrayList<>(copyCount);
+        }
+        public void addServer(long addr, long localAddress) {
+            if ((addr & 0xFFFF) == (localAddress & 0xFFFF)) {
+                addrPreferedList.add(addr);
+            } else if ((addr & 0xFF) == (localAddress & 0xFF)) {
+                addrPreferedList.add(addr);
+            }
+            addrList.add(addr);
+        }
+        public long getAddr(boolean isRead, Set<Long> aliveNodes) {
+            if (addrList.size() == 0) {
+                return 0;
+            }
+            long addr = 0;
+            if (!isRead) {
+                //对于写场景，返回桶分配表每一组copy的第一个地址
+                addr = addrList.get(0);
+                if (aliveNodes.contains(addr)) {
+                    return addr;
+                }
+            }
+            //对于读取场景，优先从优先列表中随机选取，之后做fallback
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+            if (addrPreferedList.size() > 0) {
+                int idx = random.nextInt(addrPreferedList.size());
+                addr = addrPreferedList.get(idx);
+                if (aliveNodes.contains(addr)) {
+                    return addr;
+                }
+            }
+            //fallback, 随机，loadbalance
+            {
+                int idx = random.nextInt(addrList.size());
+                addr = addrList.get(idx);
+                if (aliveNodes.contains(addr)) {
+                    return addr;
+                }
+            }
+            //fallback last, 顺序取，三层逻辑层层概率降低，应该不太会发生
+            for (int i = 0; i < addrList.size(); i++) {
+                addr = addrList.get(i);
+                if (aliveNodes.contains(addr)) {
+                    return addr;
+                }
+            }
+            return 0;
+        }
+    }
+    
 	private static final Log log = LogFactory.getLog(ConfigServer.class);
 	private static final int MURMURHASH_M = 0x5bd1e995;
 	private String groupName = null;
@@ -41,13 +97,14 @@ public class ConfigServer implements ResponseListener {
 
 	private List<String> configServerList = new ArrayList<String>();
 
-	private List<Long> serverList;
+	private List<Server> serverList;
 	private PacketStreamer pstream;
 
 	private int bucketCount = 0;
 	private int copyCount = 0;
 	
 	private Set<Long> aliveNodes;
+	private long localAddress = 0;
 
 	public ConfigServer(String groupName, List<String> configServerList,
 			PacketStreamer pstream) {
@@ -57,37 +114,55 @@ public class ConfigServer implements ResponseListener {
 		for (String host : configServerList)
 			this.configServerList.add(host.trim());
 	}
-
-	public long getServer(byte[] keyByte, boolean isRead) {
-		long addr = 0;
-		long hash = murMurHash(keyByte); // cast to int is safe
-		log.debug("hashcode: " + hash + ", bucket count: " + bucketCount);
-		if ((serverList != null) && (serverList.size() > 0)) {
-			hash %= bucketCount;
-			log.debug("bucket: " + hash);
-			long s = serverList.get((int)hash);
-			log.debug("oroginal target server: " + TairUtil.idToAddress(s) + " alive server: " + aliveNodes);
-			if (aliveNodes.contains(s))
-				addr = s;
-		}
-		
-		if (addr == 0 && isRead) {
-			int i = 0;
-			for (i=1; i<copyCount; i++) {
-				int index = ((int)hash) + i * bucketCount;
-				if (index >= serverList.size())
-					break;
-				long s = serverList.get(index);
-				log.debug("read operation try: " + TairUtil.idToAddress(s));
-				if (aliveNodes.contains(s)) {
-					addr = s;
-					break;
-				}
-			}
-		}
-
-		return addr;
+	
+	/**
+	 * 根据拉下来的配置组合新的服务器列表数组
+	 * 
+	 * @param list
+	 * @return
+	 */
+	private List<Server> generateServerList(List<Long> list) {
+	    List<Server> serverList = new ArrayList<>(bucketCount);
+	    for (int bucket = 0; bucket < bucketCount; bucket++) {
+	        Server server = new Server(copyCount);
+	        for (int copy = 0; copy < copyCount; copy++) {
+	            int idx = (copy * bucketCount) + bucket;
+	            if (idx >= list.size()) {
+	                continue;
+	            }
+	            server.addServer(list.get(idx), localAddress);
+	        }
+	        serverList.add(server);
+        }
+	    return serverList;
 	}
+
+    /**
+     * 根据key和场景（读/写）选取服务器
+     * <p>
+     * 每个bucket均有一个首选server，如果首选alive，那么全部的读写请求均优先使用它。<br>
+     * 但这样，对于跨机房的场景，会导致随机的跨机房访问（对于写请求由于服务器端的位置优先算法必然跨机房）
+     * 并且也不利于负载均衡（主要是读请求）<br>
+     * 那么这里尝试利用mask（地址相似度？）来进行选取，失败时将会做fallback
+     * 
+     * @param keyByte
+     * @param isRead
+     * @return
+     */
+    public long getServer(byte[] keyByte, boolean isRead) {
+        long hash = murMurHash(keyByte);
+        int bucket = (int) (hash % bucketCount);
+        log.debug("hashcode: " + hash + ", bucket count: " + bucketCount);
+        //避免copyOnWrite，先拷贝引用
+        List<Server> servers = serverList;
+        if (servers != null && servers.size() > bucket) {
+            Server server = servers.get(bucket);
+            if (server != null) {
+                return server.getAddr(isRead, aliveNodes);
+            }
+        }
+        return 0;
+    }
     
 	public boolean retrieveConfigure() {
 		retrieveLastTime.set(System.currentTimeMillis());
@@ -111,6 +186,7 @@ public class ConfigServer implements ResponseListener {
 			try {
 				TairClient client = TairClientFactory.getInstance().get(addr,
 						TairConstant.DEFAULT_TIMEOUT, pstream);
+				localAddress = client.getLocalAddr();
 				returnPacket = (BasePacket) client.invoke(packet,
 						TairConstant.DEFAULT_TIMEOUT);
 			} catch (Exception e) {
@@ -144,7 +220,7 @@ public class ConfigServer implements ResponseListener {
 
 				if ((r.getServerList() != null)
 						&& (r.getServerList().size() > 0)) {
-					this.serverList = r.getServerList();
+					this.serverList = generateServerList(r.getServerList());
 					aliveConfigServerIndex = lastConfigServerIndex;
 					if (log.isDebugEnabled()) {
 						for (int idx = 0; idx < r.getServerList().size(); idx++) {
@@ -280,7 +356,7 @@ public class ConfigServer implements ResponseListener {
 			}
 
 			if ((r.getServerList() != null) && (r.getServerList().size() > 0)) {
-				this.serverList = r.getServerList();
+				this.serverList = generateServerList(r.getServerList());
 				if (log.isDebugEnabled()) {
 					for (int idx = 0; idx < r.getServerList().size(); idx++) {
 						log.debug("+++ " + idx + " => "

@@ -8,6 +8,7 @@
  */
 package com.taobao.tair.comm;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.apache.mina.common.IoSession;
 import org.apache.mina.common.WriteFuture;
 
 import com.taobao.tair.etc.TairClientException;
+import com.taobao.tair.etc.TairUtil;
 import com.taobao.tair.packet.BasePacket;
 
 
@@ -43,6 +45,7 @@ public class TairClient {
 										new ConcurrentHashMap<Integer, ArrayBlockingQueue<Object>>();
 	
 	private final IoSession session;
+	private final long localAddress;
 	
 	private String key;
 	
@@ -53,6 +56,12 @@ public class TairClient {
 	protected TairClient(IoSession session,String key) {
 		this.session = session;
 		this.key=key;
+		InetSocketAddress addr = (InetSocketAddress)session.getLocalAddress();
+		localAddress = TairUtil.hostToLong(addr.getHostName(), addr.getPort());
+	}
+	
+	public long getLocalAddr() {
+	    return localAddress;
 	}
 
 	public Object invoke(final BasePacket packet, final long timeout)
