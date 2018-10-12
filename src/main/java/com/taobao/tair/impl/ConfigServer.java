@@ -345,11 +345,13 @@ public class ConfigServer implements ResponseListener {
 			log.warn("configuration synced, oldversion: " + configVersion
 					+ ", new verion: " + r.getConfigVersion());
 
-			configVersion = r.getConfigVersion();
+			if (r.getAliveNodes().isEmpty()) {
+			    throw new IllegalArgumentException("fatal error, no node is alive");
+			}
 						
+			configVersion = r.getConfigVersion();
+			
 			aliveNodes = r.getAliveNodes();	
-			if (aliveNodes.isEmpty())
-				throw new IllegalArgumentException("fatal error, no node is alive");
 					
 			for (Long id : aliveNodes) {
 				log.info("alive node: " + TairUtil.idToAddress(id));
