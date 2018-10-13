@@ -62,14 +62,27 @@ public class TairClientFactory {
 		String key = targetUrl;
 		if (clients.containsKey(key)) {
 			try {
-				return clients.get(key).get();
+				TairClient client = clients.get(key).get();
+				long now = System.currentTimeMillis();
+				//超时的client关闭掉重新建立
+				//目前先写死为300秒过期
+				if (now - client.getLastPacketTime() > 300000) {
+				    //关闭连接
+				    LOGGER.warn("回收超时的连接，" + client.toString());
+				    removeClient(key);
+				    client.close(true);
+				} else {
+				    return client;
+				}
 			} catch (Exception e) {
-				clients.remove(key);
+		        removeClient(key);
 				throw new TairClientException(
 						"get tair connection error,targetAddress is "
 								+ targetUrl, e);
 			}
-		} else {
+		}
+		//real connect
+		{
 			FutureTask<TairClient> task = new FutureTask<TairClient>(
 					new Callable<TairClient>() {
 						public TairClient call() throws Exception {
@@ -84,7 +97,7 @@ public class TairClientFactory {
 			try {
 				return existTask.get();
 			} catch (Exception e) {
-				clients.remove(key);
+				removeClient(key);
 				throw new TairClientException(
 						"get tair connection error,targetAddress is "
 								+ targetUrl, e);
@@ -93,8 +106,8 @@ public class TairClientFactory {
 	}
 
 	protected void removeClient(String key) {
-		clients.remove(key);
-	}
+        clients.remove(key);
+    }
 
 	private TairClient createClient(String targetUrl, int connectionTimeout, PacketStreamer pstreamer)
 			throws Exception {

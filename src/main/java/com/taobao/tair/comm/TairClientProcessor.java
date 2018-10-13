@@ -58,8 +58,13 @@ public class TairClientProcessor extends IoHandlerAdapter{
 		}
 	}
 
+	@Override
 	public void sessionClosed(IoSession session) throws Exception {
-		factory.removeClient(key);
+	    //这里为了处理超时回收场景中主动关闭的情况
+	    Object val = session.getAttribute("removed");
+	    if (val == null) {
+    		factory.removeClient(key);
+	    }
 	}
 	
 }

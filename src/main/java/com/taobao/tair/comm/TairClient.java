@@ -49,6 +49,8 @@ public class TairClient {
 	
 	private String key;
 	
+	private long lastPacketTime = 0;
+	
 	static{
 		new Thread(new CallbackTasksScan()).start();
 	}
@@ -58,11 +60,21 @@ public class TairClient {
 		this.key=key;
 		InetSocketAddress addr = (InetSocketAddress)session.getLocalAddress();
 		localAddress = TairUtil.hostToLong(addr.getHostName(), addr.getPort());
+		lastPacketTime = System.currentTimeMillis();
 	}
 	
 	public long getLocalAddr() {
 	    return localAddress;
 	}
+	
+	/**
+	 * 最后一次命令执行时间戳(连接的最后使用时间)
+	 * 
+	 * @return
+	 */
+	public long getLastPacketTime() {
+        return lastPacketTime;
+    }
 
 	public Object invoke(final BasePacket packet, final long timeout)
 			throws TairClientException {
@@ -70,12 +82,13 @@ public class TairClient {
 			LOGGER.debug("send request [" + packet.getChid() + "],time is:"
 					+ System.currentTimeMillis());
 		}
+		lastPacketTime = System.currentTimeMillis();
 		ArrayBlockingQueue<Object> queue = new ArrayBlockingQueue<Object>(1);
 		responses.put(packet.getChid(), queue);
 		ByteBuffer bb = packet.getByteBuffer();
 		bb.flip();
 		byte[] data = new byte[bb.remaining()];
-		bb.get(data);		
+		bb.get(data);
 		WriteFuture writeFuture = session.write(data);
 		writeFuture.addListener(new IoFutureListener() {
 
@@ -98,14 +111,8 @@ public class TairClient {
 				} catch (TairClientException e) {
 					// IGNORE,should not happen
 				}
-				// close this session
-				if(session.isConnected())
-					session.close();
-				else
-					TairClientFactory.getInstance().removeClient(key);
+				close();
 			}
-			
-
 		});
 		Object response = null;
 		try {
@@ -136,14 +143,34 @@ public class TairClient {
 		return response;
 	}
 	
+	public void close() {
+	    close(false);
+	}
+	
+	/**
+	 * @param force 是否是主动回收主动关闭
+	 */
+	public void close(boolean force) {
+	    // close this session
+        if(session.isConnected()) {
+            if (force) {
+                session.setAttribute("removed", true);
+            }
+            session.close();
+            System.out.println("异步关闭");
+        } else {
+            TairClientFactory.getInstance().removeClient(key);
+        }
+	}
 
 	public void invokeAsync(final BasePacket packet, final long timeout,ResponseListener listener){
 		if(isDebugEnabled){
 			LOGGER.debug("send request ["+packet.getChid()+"] async,time is:"+System.currentTimeMillis());
 		}
-		if(minTimeout>timeout){
-			minTimeout=timeout;
-		}
+        lastPacketTime = System.currentTimeMillis();
+        if (minTimeout > timeout) {
+            minTimeout = timeout;
+        }
 		final ResponseCallbackTask callbackTask=new ResponseCallbackTask(packet.getChid(),listener,timeout);
 		callbackTasks.put(packet.getChid(), callbackTask);
 		
@@ -163,11 +190,7 @@ public class TairClient {
 	            LOGGER.warn(error);
 	            callbackTask.setResponse(new TairClientException(error));
 	            
-				// close this session
-				if(session.isConnected())
-					session.close();
-				else
-					TairClientFactory.getInstance().removeClient(key);
+				close();
 			}
 			
 		});
