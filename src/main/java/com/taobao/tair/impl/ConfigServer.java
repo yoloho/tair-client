@@ -311,7 +311,8 @@ public class ConfigServer implements ResponseListener {
 		RequestGetGroupPacket packet = new RequestGetGroupPacket(null);
 
 		packet.setGroupName(groupName);
-		packet.setConfigVersion(version);
+		// version = 0 force update
+		packet.setConfigVersion(version > 0 ? configVersion : 0);
 
 		for (int i = 0; i < configServerList.size(); i++) {
 			int index = lastConfigServerIndex % configServerList.size();
