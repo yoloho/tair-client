@@ -736,6 +736,9 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Map<Object,ResultCode>>(ResultCode.NSERROR);
 		}
+		if (pkey == null || keyValuePacks == null || keyValuePacks.size() == 0) {
+		    return new Result<Map<Object,ResultCode>>(ResultCode.INVALIDARG);
+		}
 		RequestPrefixPutsPacket packet = new RequestPrefixPutsPacket(transcoder);
 		packet.setNamespace((short) namespace);
 		packet.setPkey(pkey);
@@ -826,6 +829,14 @@ public class DefaultTairManager implements TairManager {
 	public ResultCode prefixDeletes(int namespace, Serializable pkey, List<? extends Serializable> skeys) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
+		}
+		
+		if (pkey == null) {
+		    return ResultCode.INVALIDARG;
+		}
+		
+		if (skeys == null || skeys.size() < 1) {
+		    return ResultCode.INVALIDARG;
 		}
 
 		RequestPrefixRemovesPacket packet = new RequestPrefixRemovesPacket(transcoder);

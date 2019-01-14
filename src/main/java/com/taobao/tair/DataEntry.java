@@ -18,7 +18,6 @@ import com.taobao.tair.etc.TairUtil;
 /**
  * data entry object, includes key, value and meta infomations
  */
-@SuppressWarnings("unused")
 public class DataEntry implements Serializable {
 
 	private static final long serialVersionUID = -3492001385938512871L;

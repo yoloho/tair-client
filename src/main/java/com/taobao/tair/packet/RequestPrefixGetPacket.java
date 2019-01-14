@@ -46,6 +46,7 @@ public class RequestPrefixGetPacket extends BasePacket {
 
 			list.add(keyByte);
 			capacity += 40;
+			capacity += pkey_data.length;
 			capacity += keyByte.length;
 		}
 
