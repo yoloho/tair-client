@@ -47,16 +47,20 @@ public class ConfigServer implements ResponseListener {
             }
             addrList.add(addr);
         }
-        public long getAddr(boolean isRead, Set<Long> aliveNodes) {
+        public long getAddr(boolean isRead, Set<Long> aliveNodes, boolean readLocalSlaveFirst) {
             if (addrList.size() == 0) {
                 return 0;
             }
             long addr = 0;
-            if (!isRead) {
-                //对于写场景，返回桶分配表每一组copy的第一个地址
+            if (!isRead || !readLocalSlaveFirst) {
+                // 对于写场景，返回桶分配表每一组copy的第一个地址
                 addr = addrList.get(0);
                 if (aliveNodes.contains(addr)) {
                     return addr;
+                }
+                if (!isRead) {
+                    // 对于写场景，如果第一个地址不可用，那就不能用了
+                    return 0;
                 }
             }
             //对于读取场景，优先从优先列表中随机选取，之后做fallback
@@ -147,9 +151,10 @@ public class ConfigServer implements ResponseListener {
      * 
      * @param keyByte
      * @param isRead
+     * @param readLocalSlaveFirst 是否优先从本地备选节点读数据
      * @return
      */
-    public long getServer(byte[] keyByte, boolean isRead) {
+    public long getServer(byte[] keyByte, boolean isRead, boolean readLocalSlaveFirst) {
         long hash = murMurHash(keyByte);
         int bucket = (int) (hash % bucketCount);
         log.debug("hashcode: " + hash + ", bucket count: " + bucketCount);
@@ -158,7 +163,7 @@ public class ConfigServer implements ResponseListener {
         if (servers != null && servers.size() > bucket) {
             Server server = servers.get(bucket);
             if (server != null) {
-                return server.getAddr(isRead, aliveNodes);
+                return server.getAddr(isRead, aliveNodes, readLocalSlaveFirst);
             }
         }
         return 0;

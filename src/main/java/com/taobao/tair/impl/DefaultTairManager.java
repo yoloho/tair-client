@@ -67,6 +67,7 @@ public class DefaultTairManager implements TairManager {
 	private String charset = null;
 	private String name = null;
 	private AtomicInteger failCounter = new AtomicInteger(0);
+	private boolean readLocalSlaveFirst = false;
 
 	public DefaultTairManager() {
 		this("DefaultTairManager");
@@ -89,7 +90,7 @@ public class DefaultTairManager implements TairManager {
 	}
 
 	private TairClient getClient(Object key, boolean isRead) {
-		long address = configServer.getServer(transcoder.encode(key), isRead);
+		long address = configServer.getServer(transcoder.encode(key), isRead, isReadLocalSlaveFirst());
 		
 		if (address == 0)
 			return null;
@@ -318,7 +319,7 @@ public class DefaultTairManager implements TairManager {
 
 		for (Object key : keys) {
 			long address = configServer
-					.getServer(transcoder.encode(key), false);
+					.getServer(transcoder.encode(key), false, isReadLocalSlaveFirst());
 
 			if (address == 0) {
 				continue;
@@ -393,7 +394,7 @@ public class DefaultTairManager implements TairManager {
 		RequestCommandCollection rcc = new RequestCommandCollection();
 
 		for (Object key : keys) {
-			long address = configServer.getServer(transcoder.encode(key), true);
+			long address = configServer.getServer(transcoder.encode(key), true, isReadLocalSlaveFirst());
 
 			if (address == 0) {
 				continue;
@@ -664,6 +665,20 @@ public class DefaultTairManager implements TairManager {
 	public void setMaxWaitThread(int maxWaitThread) {
 		this.maxWaitThread = maxWaitThread;
 	}
+	
+	public boolean isReadLocalSlaveFirst() {
+        return readLocalSlaveFirst;
+    }
+	
+	/**
+	 * 对于读操作，是否优先从（本地）slave节点读取(可能某些情况有数据不一致或不及时的问题)<br>
+	 * 默认是优先主节点，不存活的时候才从备选节点中挑选
+	 * 
+	 * @param readLocalSlaveFirst
+	 */
+	public void setReadLocalSlaveFirst(boolean readLocalSlaveFirst) {
+        this.readLocalSlaveFirst = readLocalSlaveFirst;
+    }
 
 	public int getTimeout() {
 		return timeout;
