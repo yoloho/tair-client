@@ -88,73 +88,83 @@ public class DefaultTairManager implements TairManager {
 		multiSender = new MultiSender(packetStreamer);
 		log.warn(name + " [" + getVersion() + "] started...");
 	}
+	
+	private TairClient getClient(long address) {
+        if (address == 0)
+            return null;
+
+        String host = TairUtil.idToAddress(address);
+        if (host != null) {
+            try {
+                return TairClientFactory.getInstance().get(host, timeout,
+                        packetStreamer);
+            } catch (TairClientException e) {
+                log.error("getClient failed " + host, e);
+            }
+        }
+
+        return null;
+    }
 
 	private TairClient getClient(Object key, boolean isRead) {
 		long address = configServer.getServer(transcoder.encode(key), isRead, isReadLocalSlaveFirst());
-		
-		if (address == 0)
-			return null;
-
-		String host = TairUtil.idToAddress(address);
-		if (host != null) {
-			try {
-				return TairClientFactory.getInstance().get(host, timeout,
-						packetStreamer);
-			} catch (TairClientException e) {
-				log.error("getClient failed " + host, e);
-			}
-		}
-
-		return null;
+		return getClient(address);
+	}
+	
+	public List<Long> getServers(Object key) {
+	    return configServer.getServerAddrs(transcoder.encode(key));
 	}
 
 	private BasePacket sendRequest(Object key, BasePacket packet) {
 		return sendRequest(key, packet, false);
 	}
+	
+	private BasePacket sendRequest(TairClient client, BasePacket packet) {
+	    if (client == null) {
+            int value = failCounter.incrementAndGet();
+
+            if (value > 100) {
+                configServer.checkConfigVersion(0);
+                failCounter.set(0);
+                log.warn("connection failed happened 100 times, sync configuration");
+            }
+
+            log.warn("conn is null ");
+            return null;
+        }
+
+        long startTime = System.currentTimeMillis();
+        BasePacket returnPacket = null;
+        try {
+            returnPacket = (BasePacket) client.invoke(packet, timeout);
+        } catch (TairClientException e) {
+            log.error("send request to " + client + " failed " + e);
+        }
+        long endTime = System.currentTimeMillis();
+
+        if (returnPacket == null) {
+
+            if (failCounter.incrementAndGet() > 100) {
+                configServer.checkConfigVersion(0);
+                failCounter.set(0);
+                log.warn("connection failed happened 100 times, sync configuration");
+            }
+
+            return null;
+        }
+
+        return returnPacket;
+	}
 
 	private BasePacket sendRequest(Object key, BasePacket packet, boolean isRead) {
 		TairClient client = getClient(key, isRead);
-
-		if (client == null) {
-			int value = failCounter.incrementAndGet();
-
-			if (value > 100) {
-				configServer.checkConfigVersion(0);
-				failCounter.set(0);
-				log.warn("connection failed happened 100 times, sync configuration");
-			}
-
-			log.warn("conn is null ");
-			return null;
-		}
-
-		long startTime = System.currentTimeMillis();
-		BasePacket returnPacket = null;
-		try {
-			returnPacket = (BasePacket) client.invoke(packet, timeout);
-		} catch (TairClientException e) {
-			log.error("send request to " + client + " failed " + e);
-		}
-		long endTime = System.currentTimeMillis();
-
-		if (returnPacket == null) {
-
-			if (failCounter.incrementAndGet() > 100) {
-				configServer.checkConfigVersion(0);
-				failCounter.set(0);
-				log.warn("connection failed happened 100 times, sync configuration");
-			}
-
-			return null;
-		} else {
-			if (log.isDebugEnabled()) {
-				log.debug("key=" + key + ", timeout: " + timeout + ", used: "
-						+ (endTime - startTime) + " (ms), client: " + client);
-			}
-		}
-
-		return returnPacket;
+		return sendRequest(client, packet);
 	}
+	
+	private BasePacket sendRequest(long addr, BasePacket packet) {
+        TairClient client = getClient(addr);
+        return sendRequest(client, packet);
+    }
 
 	public Result<Integer> decr(int namespace, Serializable key, int value,
 			int defaultValue, int expireTime) {
@@ -555,7 +565,23 @@ public class DefaultTairManager implements TairManager {
 	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit) {
 		return getRange(namespace, prefix, keyStart, keyEnd, offset, limit, TairConstant.TAIR_GET_RANGE_ALL);
 	}
+	
 	public Result<List<DataEntry>> getRange(int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit, short type) {
+	    return getRange(0, namespace, prefix, keyStart, keyEnd, offset, limit, type);
+	}
+	
+	/**
+	 * @param addr 可以为0，大于0则优先根据这个地址来发请求包，目前增加这个参数主要用于主备同时扫描，确认数据一致性
+	 * @param namespace
+	 * @param prefix
+	 * @param keyStart
+	 * @param keyEnd
+	 * @param offset
+	 * @param limit
+	 * @param type
+	 * @return
+	 */
+	public Result<List<DataEntry>> getRange(long addr, int namespace, Serializable prefix, Serializable keyStart, Serializable keyEnd, int offset, int limit, short type) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<List<DataEntry>>(ResultCode.NSERROR);
 		}
@@ -582,7 +608,13 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(prefix, packet, true);
+		
+		BasePacket returnPacket = null;
+		if (addr > 0) {
+		    returnPacket = sendRequest(addr, packet);
+		} else {
+		    returnPacket = sendRequest(prefix, packet, true);
+		}
 
 		if ((returnPacket != null) && returnPacket instanceof ResponseGetRangePacket) {
 			ResponseGetRangePacket r = (ResponseGetRangePacket) returnPacket;
@@ -745,9 +777,18 @@ public class DefaultTairManager implements TairManager {
 	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks) {
 		return prefixPuts(namespace, pkey, keyValuePacks, null);
 	}
+	
+	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks, int expire) {
+        return prefixPuts(namespace, pkey, keyValuePacks, null, expire);
+    }
+	
+	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks,
+            List<KeyCountPack> keyCountPacks) {
+	    return prefixPuts(namespace, pkey, keyValuePacks, keyCountPacks, 0);
+	}
 
 	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks,
-			List<KeyCountPack> keyCountPacks) {
+			List<KeyCountPack> keyCountPacks, int expire) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Map<Object,ResultCode>>(ResultCode.NSERROR);
 		}
@@ -759,6 +800,7 @@ public class DefaultTairManager implements TairManager {
 		packet.setPkey(pkey);
 		packet.setKeyList(keyValuePacks);
 		packet.setKeyCountList(keyCountPacks);
+		packet.setExpired(expire);
 		int ec = packet.encode();
 		if (ec == 1) {
 			return new Result<Map<Object,ResultCode>>(ResultCode.KEYTOLARGE);
@@ -790,8 +832,20 @@ public class DefaultTairManager implements TairManager {
 	public Result<DataEntry> prefixGet(int namespace, Serializable pkey, Serializable skey) {
 		return get(namespace, pkey, skey);
 	}
-
+	
 	public Result<Map<Object, Result<DataEntry>>> prefixGets(int namespace, Serializable pkey,
+            List<? extends Serializable> skeyList) {
+	    return prefixGets(0, namespace, pkey, skeyList);
+	}
+
+	/**
+	 * @param addr 增加了指定server地址的功能，用于集群一致性校验，一般别用
+	 * @param namespace
+	 * @param pkey
+	 * @param skeyList
+	 * @return
+	 */
+	public Result<Map<Object, Result<DataEntry>>> prefixGets(long addr, int namespace, Serializable pkey,
 			List<? extends Serializable> skeyList) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Map<Object,Result<DataEntry>>>(ResultCode.NSERROR);
@@ -811,7 +865,12 @@ public class DefaultTairManager implements TairManager {
 		}
 
 		ResultCode rc = ResultCode.CONNERROR;
-		BasePacket returnPacket = sendRequest(pkey, packet, true);
+		BasePacket returnPacket = null;
+		if (addr > 0) {
+		    returnPacket = sendRequest(addr, packet);
+		} else {
+		    returnPacket = sendRequest(pkey, packet, true);
+		}
 
 		if ((returnPacket != null) && returnPacket instanceof ResponsePrefixGetsPacket) {
 			ResponsePrefixGetsPacket r = (ResponsePrefixGetsPacket) returnPacket;

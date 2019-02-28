@@ -9,6 +9,8 @@
 package com.taobao.tair.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +48,9 @@ public class ConfigServer implements ResponseListener {
                 addrPreferedList.add(addr);
             }
             addrList.add(addr);
+        }
+        public List<Long> getAddrList() {
+            return addrList;
         }
         public long getAddr(boolean isRead, Set<Long> aliveNodes, boolean readLocalSlaveFirst) {
             if (addrList.size() == 0) {
@@ -155,6 +160,14 @@ public class ConfigServer implements ResponseListener {
      * @return
      */
     public long getServer(byte[] keyByte, boolean isRead, boolean readLocalSlaveFirst) {
+        Server server = getServer(keyByte);
+        if (server != null) {
+            return server.getAddr(isRead, aliveNodes, readLocalSlaveFirst);
+        }
+        return 0;
+    }
+    
+    private Server getServer(byte[] keyByte) {
         long hash = murMurHash(keyByte);
         int bucket = (int) (hash % bucketCount);
         log.debug("hashcode: " + hash + ", bucket count: " + bucketCount);
@@ -163,10 +176,41 @@ public class ConfigServer implements ResponseListener {
         if (servers != null && servers.size() > bucket) {
             Server server = servers.get(bucket);
             if (server != null) {
-                return server.getAddr(isRead, aliveNodes, readLocalSlaveFirst);
+                return server;
             }
         }
-        return 0;
+        return null;
+    }
+    
+    /**
+     * 根据key返回其所在的那组服务器地址列表，第一个为主节点后面为备节点<br>
+     * 注意，如果主节点不存活，则直接返回为空
+     * 
+     * @param keyByte
+     * @return
+     */
+    public List<Long> getServerAddrs(byte[] keyByte) {
+        Server server = getServer(keyByte);
+        if (server == null) {
+            return Collections.emptyList();
+        }
+        List<Long> addrs = server.getAddrList();
+        if (addrs == null || addrs.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (!aliveNodes.contains(addrs.get(0))) {
+            // 主节点不存活
+            return Collections.emptyList();
+        }
+        List<Long> result = new ArrayList<>(addrs.size());
+        result.addAll(addrs);
+        Iterator<Long> it = result.iterator();
+        while (it.hasNext()) {
+            if (!aliveNodes.contains(it.next())) {
+                it.remove();
+            }
+        }
+        return addrs;
     }
     
 	public boolean retrieveConfigure() {

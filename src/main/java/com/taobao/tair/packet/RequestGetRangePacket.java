@@ -38,7 +38,7 @@ public class RequestGetRangePacket extends BasePacket {
 	 * encode
 	 */
 	public int encode() {
-		writePacketBegin(0);
+		writePacketBegin(1060);
 		// body
 		byteBuffer.put((byte) 0);
 		byteBuffer.putShort(cmd);
