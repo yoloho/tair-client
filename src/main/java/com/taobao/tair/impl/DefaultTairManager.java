@@ -181,6 +181,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
 		}
+		
+		if (key == null) {
+            return ResultCode.INVALIDARG;
+        }
 
 		RequestRemovePacket packet = new RequestRemovePacket(transcoder);
 
@@ -220,6 +224,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<DataEntry>(ResultCode.NSERROR);
 		}
+		
+		if (key == null) {
+            return new Result<DataEntry>(ResultCode.INVALIDARG);
+        }
 
 		RequestGetPacket packet = new RequestGetPacket(transcoder);
 
@@ -279,6 +287,10 @@ public class DefaultTairManager implements TairManager {
 			return new Result<Integer>(ResultCode.NSERROR);
 		}
 		
+		if (key == null) {
+            return new Result<Integer>(ResultCode.INVALIDARG);
+        }
+		
 		if (expireTime < 0)
 			return new Result<Integer>(ResultCode.INVALIDARG);
 
@@ -324,6 +336,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
 		}
+		
+		if (keys == null || keys.isEmpty()) {
+            return ResultCode.INVALIDARG;
+        }
 
 		RequestCommandCollection rcc = new RequestCommandCollection();
 
@@ -400,6 +416,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<List<DataEntry>>(ResultCode.NSERROR);
 		}
+		
+		if (keys == null || keys.isEmpty()) {
+            return new Result<List<DataEntry>>(ResultCode.INVALIDARG);
+        }
 
 		RequestCommandCollection rcc = new RequestCommandCollection();
 
@@ -516,6 +536,10 @@ public class DefaultTairManager implements TairManager {
 			return ResultCode.NSERROR;
 		}
 		
+		if (key == null || value == null) {
+            return ResultCode.INVALIDARG;
+        }
+		
 		if (expireTime < 0)
 			return ResultCode.INVALIDARG;
 
@@ -585,6 +609,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<List<DataEntry>>(ResultCode.NSERROR);
 		}
+		
+		if (prefix == null || keyStart == null || keyEnd == null) {
+            return new Result<List<DataEntry>>(ResultCode.INVALIDARG);
+        }
 
 		RequestGetRangePacket packet = new RequestGetRangePacket(transcoder);
 		packet.setNamespace((short)namespace);
@@ -850,6 +878,9 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Map<Object,Result<DataEntry>>>(ResultCode.NSERROR);
 		}
+		if (pkey == null || skeyList == null || skeyList.isEmpty()) {
+		    return new Result<Map<Object,Result<DataEntry>>>(ResultCode.INVALIDARG);
+		}
 
 		RequestPrefixGetPacket packet = new RequestPrefixGetPacket(transcoder);
 
@@ -1066,6 +1097,10 @@ public class DefaultTairManager implements TairManager {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return ResultCode.NSERROR;
 		}
+		
+		if (key == null) {
+            return ResultCode.INVALIDARG;
+        }
 
 		RequestLockPacket packet = new RequestLockPacket(transcoder);
 		packet.setNamespace((short)namespace);
