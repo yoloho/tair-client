@@ -803,20 +803,11 @@ public class DefaultTairManager implements TairManager {
 	}
 
 	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks) {
-		return prefixPuts(namespace, pkey, keyValuePacks, null);
-	}
-	
-	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks, int expire) {
-        return prefixPuts(namespace, pkey, keyValuePacks, null, expire);
+        return prefixPuts(namespace, pkey, keyValuePacks, null);
     }
 	
 	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks,
             List<KeyCountPack> keyCountPacks) {
-	    return prefixPuts(namespace, pkey, keyValuePacks, keyCountPacks, 0);
-	}
-
-	public Result<Map<Object, ResultCode>> prefixPuts(int namespace, Serializable pkey, List<KeyValuePack> keyValuePacks,
-			List<KeyCountPack> keyCountPacks, int expire) {
 		if ((namespace < 0) || (namespace > TairConstant.NAMESPACE_MAX)) {
 			return new Result<Map<Object,ResultCode>>(ResultCode.NSERROR);
 		}
@@ -828,7 +819,6 @@ public class DefaultTairManager implements TairManager {
 		packet.setPkey(pkey);
 		packet.setKeyList(keyValuePacks);
 		packet.setKeyCountList(keyCountPacks);
-		packet.setExpired(expire);
 		int ec = packet.encode();
 		if (ec == 1) {
 			return new Result<Map<Object,ResultCode>>(ResultCode.KEYTOLARGE);

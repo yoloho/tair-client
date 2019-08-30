@@ -52,7 +52,7 @@ public class RequestGetItemsPacket extends RequestGetPacket {
 
 		for (byte[] keyByte : list) {
 			fillMetas();
-			DataEntry.encodeMeta(byteBuffer);
+			DataEntry.encodeMetaEmpty(byteBuffer);
 			byteBuffer.putInt(keyByte.length);
 			byteBuffer.put(keyByte);
 		}

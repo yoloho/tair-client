@@ -19,8 +19,6 @@ import com.taobao.tair.etc.TairConstant;
 
 public class RequestPrefixPutsPacket extends BasePacket {
 	protected short namespace;
-	protected short version;
-	protected int expired;
 	protected Object pKey;
 
 	protected List<KeyValuePack> keyList;
@@ -124,21 +122,6 @@ public class RequestPrefixPutsPacket extends BasePacket {
 	}
 
 	/**
-	 * @return the expired
-	 */
-	public int getExpired() {
-		return expired;
-	}
-
-	/**
-	 * @param expired
-	 *            the expired to set
-	 */
-	public void setExpired(int expired) {
-		this.expired = expired;
-	}
-
-	/**
 	 * @return the namespace
 	 */
 	public short getNamespace() {
@@ -151,21 +134,6 @@ public class RequestPrefixPutsPacket extends BasePacket {
 	 */
 	public void setNamespace(short namespace) {
 		this.namespace = namespace;
-	}
-
-	/**
-	 * @return the version
-	 */
-	public short getVersion() {
-		return version;
-	}
-
-	/**
-	 * @param version
-	 *            the version to set
-	 */
-	public void setVersion(short version) {
-		this.version = version;
 	}
 
 }

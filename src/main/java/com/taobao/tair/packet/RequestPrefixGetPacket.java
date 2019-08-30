@@ -59,7 +59,7 @@ public class RequestPrefixGetPacket extends BasePacket {
 
 		for (byte[] keyByte : list) {
 			fillMetas();
-			DataEntry.encodeMeta(byteBuffer);
+			DataEntry.encodeMetaEmpty(byteBuffer);
 			byteBuffer.putInt((keyByte.length + pkey_data.length) | pkey_data.length << 22);
 			byteBuffer.put(pkey_data);
 			byteBuffer.put(keyByte);

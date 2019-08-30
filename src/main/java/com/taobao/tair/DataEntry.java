@@ -140,7 +140,7 @@ public class DataEntry implements Serializable {
 		edate = bytes.getInt();
 	}
 
-	public static void encodeMeta(ByteBuffer bytes, int flag) {
+	public static void encodeMetaWithFlag(ByteBuffer bytes, int flag) {
 		bytes.put(DEFAULT_DATA);
 		if (flag != 0) {
 			// put flag implicitly
@@ -173,7 +173,7 @@ public class DataEntry implements Serializable {
 	public int encode(ByteBuffer bytes, Transcoder transcoder) {
 		if (key != null) {
 			fillMetas(bytes);
-			encodeMeta(bytes);
+			encodeMeta(bytes, this);
 			if (keyData == null) {
 				keyData = transcoder.encode(key);
 			}
@@ -193,7 +193,7 @@ public class DataEntry implements Serializable {
 		}
 		if (value != null) {
 			fillMetas(bytes);
-			encodeMeta(bytes);
+			encodeMeta(bytes, this);
 			if (value_flag > 0) {
 				int pos = bytes.position();
 				bytes.put(pos - 13, value_flag);
@@ -212,7 +212,7 @@ public class DataEntry implements Serializable {
 	
 	public static int encode(ByteBuffer bytes, Object key, Transcoder transcoder) {
 		fillMetas(bytes);
-		encodeMeta(bytes);
+		encodeMetaEmpty(bytes);
 		byte[] data = transcoder.encode(key);
 		bytes.putInt(data.length);
 		bytes.put(data);
@@ -288,7 +288,7 @@ public class DataEntry implements Serializable {
 		this.value_flag = flag;
 	}
 
-	public static void encodeMeta(ByteBuffer bytes) {
+	public static void encodeMetaEmpty(ByteBuffer bytes) {
 		bytes.put(DEFAULT_DATA);
 	}
 	

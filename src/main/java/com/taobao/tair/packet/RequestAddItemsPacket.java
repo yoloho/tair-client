@@ -57,12 +57,13 @@ public class RequestAddItemsPacket extends RequestPutPacket {
 		byteBuffer.putInt(expired);
 		
 		fillMetas();
-		DataEntry.encodeMeta(byteBuffer);
+		// XXX It should be verified that ttl(expire) doesn't needed here in meta header
+		DataEntry.encodeMetaEmpty(byteBuffer);
 		byteBuffer.putInt(keyByte.length);
 		byteBuffer.put(keyByte);
 
 		fillMetas();
-		DataEntry.encodeMeta(byteBuffer);
+		DataEntry.encodeMetaEmpty(byteBuffer);
 		byteBuffer.putInt(totalDataSize);
 		byteBuffer.putInt(dataByte.size());
 		for (int i=0; i<dataByte.size(); ++i) {
